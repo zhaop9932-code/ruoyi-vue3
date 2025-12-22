@@ -1,0 +1,935 @@
+// CPQ系统专用样式
+// 设计理念：专业、现代、清晰、易用
+
+// 主色调：蓝色系，代表专业、信任、科技
+$cpq-primary: #409EFF;
+$cpq-primary-light: #66b1ff;
+$cpq-primary-dark: #337ecc;
+
+// 辅助色：橙色系，用于强调和交互
+$cpq-accent: #FF7D00;
+$cpq-accent-light: #ffa940;
+$cpq-accent-dark: #e67000;
+
+// 成功色：绿色系，用于成功状态和积极反馈
+$cpq-success: #67C23A;
+$cpq-success-light: #85ce61;
+$cpq-success-dark: #529b2e;
+
+// 警告色：黄色系，用于警告状态和提醒
+$cpq-warning: #E6A23C;
+$cpq-warning-light: #ebb563;
+$cpq-warning-dark: #cf9236;
+
+// 危险色：红色系，用于错误状态和删除操作
+$cpq-danger: #F56C6C;
+$cpq-danger-light: #f78989;
+$cpq-danger-dark: #dd6161;
+
+// 中性色：灰色系，用于背景、边框、文本等
+$cpq-bg: #f5f7fa;
+$cpq-bg-light: #ffffff;
+$cpq-bg-dark: #e4e7ed;
+$cpq-border: #dcdfe6;
+$cpq-border-light: #e4e7ed;
+$cpq-border-dark: #c0c4cc;
+$cpq-text-primary: #303133;
+$cpq-text-regular: #606266;
+$cpq-text-secondary: #909399;
+$cpq-text-placeholder: #c0c4cc;
+
+// CPQ系统通用容器样式
+.cpq-container {
+  background-color: $cpq-bg-light;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+  }
+}
+
+// CPQ页面标题样式
+.cpq-page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: $cpq-text-primary;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid $cpq-primary;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 20px;
+    background-color: $cpq-primary;
+    border-radius: 2px;
+  }
+}
+
+// CPQ页面操作栏样式
+.cpq-action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: $cpq-bg;
+  border-radius: 8px;
+  border-left: 4px solid $cpq-primary;
+}
+
+// CPQ搜索卡片样式
+.cpq-search-card {
+  background-color: $cpq-bg-light;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  .el-form {
+    margin-bottom: 0;
+  }
+}
+
+// CPQ表格样式
+.cpq-table {
+  background-color: $cpq-bg-light;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+
+  .el-table {
+    border: none;
+
+    &__header-wrapper {
+      background-color: $cpq-bg;
+
+      th {
+        background-color: $cpq-bg;
+        color: $cpq-text-primary;
+        font-weight: 600;
+        border-bottom: 2px solid $cpq-primary;
+        padding: 12px 0;
+      }
+    }
+
+    &__body-wrapper {
+      tr {
+        transition: all 0.3s ease;
+
+        &:hover > td {
+          background-color: rgba(64, 158, 255, 0.05);
+        }
+
+        &.el-table__row--striped {
+          background-color: $cpq-bg;
+        }
+
+        td {
+          border-bottom: 1px solid $cpq-border-light;
+          padding: 12px 0;
+          color: $cpq-text-regular;
+        }
+      }
+    }
+
+    &__empty-block {
+      padding: 40px 0;
+    }
+  }
+}
+
+// CPQ表单样式
+.cpq-form {
+  .el-form-item {
+    margin-bottom: 20px;
+
+    .el-form-item__label {
+      color: $cpq-text-primary;
+      font-weight: 500;
+    }
+
+    .el-input,
+    .el-select,
+    .el-cascader {
+      width: 100%;
+
+      // 移除直接设置的边框和焦点样式，完全使用Element Plus默认样式
+      .el-input__inner {
+        border-radius: 6px;
+        transition: all 0.3s ease;
+      }
+    }
+  }
+}
+
+// CPQ对话框样式
+.cpq-dialog {
+  .el-dialog__header {
+    background-color: $cpq-primary;
+    border-radius: 8px 8px 0 0;
+
+    .el-dialog__title {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .el-dialog__headerbtn {
+      .el-icon {
+        color: #fff;
+
+        &:hover {
+          color: rgba(255, 255, 255, 0.8);
+        }
+      }
+    }
+  }
+
+  .el-dialog__body {
+    padding: 24px;
+  }
+
+  .el-dialog__footer {
+    padding: 16px 24px;
+    background-color: $cpq-bg;
+    border-radius: 0 0 8px 8px;
+    border-top: 1px solid $cpq-border-light;
+  }
+}
+
+// CPQ按钮样式
+.cpq-btn {
+  &.el-button--primary {
+    background-color: $cpq-primary;
+    border-color: $cpq-primary;
+
+    &:hover,
+    &:focus {
+      background-color: $cpq-primary-light;
+      border-color: $cpq-primary-light;
+    }
+  }
+
+  &.el-button--success {
+    background-color: $cpq-success;
+    border-color: $cpq-success;
+
+    &:hover,
+    &:focus {
+      background-color: $cpq-success-light;
+      border-color: $cpq-success-light;
+    }
+  }
+
+  &.el-button--warning {
+    background-color: $cpq-warning;
+    border-color: $cpq-warning;
+
+    &:hover,
+    &:focus {
+      background-color: $cpq-warning-light;
+      border-color: $cpq-warning-light;
+    }
+  }
+
+  &.el-button--danger {
+    background-color: $cpq-danger;
+    border-color: $cpq-danger;
+
+    &:hover,
+    &:focus {
+      background-color: $cpq-danger-light;
+      border-color: $cpq-danger-light;
+    }
+  }
+
+  &.el-button--accent {
+    background-color: $cpq-accent;
+    border-color: $cpq-accent;
+    color: #fff;
+
+    &:hover,
+    &:focus {
+      background-color: $cpq-accent-light;
+      border-color: $cpq-accent-light;
+    }
+  }
+}
+
+// CPQ标签页样式
+.cpq-tabs {
+  .el-tabs__header {
+    margin-bottom: 20px;
+
+    .el-tabs__nav-wrap {
+      padding-bottom: 10px;
+      border-bottom: 1px solid $cpq-border-light;
+    }
+
+    .el-tabs__nav {
+      .el-tabs__item {
+        color: $cpq-text-secondary;
+        font-weight: 500;
+        padding: 10px 20px;
+        margin-right: 20px;
+        transition: all 0.3s ease;
+
+        &:hover {
+          color: $cpq-primary;
+        }
+
+        &.is-active {
+          color: $cpq-primary;
+          font-weight: 600;
+
+          &::after {
+            background-color: $cpq-primary;
+            height: 3px;
+          }
+        }
+      }
+    }
+  }
+}
+
+// CPQ分页样式
+.cpq-pagination {
+  margin-top: 20px;
+  text-align: right;
+  padding: 20px;
+  background-color: $cpq-bg-light;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+}
+
+// CPQ卡片样式
+.cpq-card {
+  background-color: $cpq-bg-light;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  .el-card__header {
+    border-bottom: 1px solid $cpq-border-light;
+    padding: 16px 0;
+    margin-bottom: 20px;
+
+    .el-card__title {
+      font-size: 18px;
+      font-weight: 600;
+      color: $cpq-text-primary;
+    }
+  }
+
+  .el-card__body {
+    padding: 0;
+  }
+}
+
+// CPQ操作按钮组样式
+.cpq-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  .el-button {
+    margin: 0;
+  }
+}
+
+// CPQ状态标签样式
+.cpq-status-tag {
+  &.el-tag--success {
+    background-color: rgba(103, 194, 58, 0.1);
+    border-color: rgba(103, 194, 58, 0.2);
+    color: $cpq-success;
+  }
+
+  &.el-tag--danger {
+    background-color: rgba(245, 108, 108, 0.1);
+    border-color: rgba(245, 108, 108, 0.2);
+    color: $cpq-danger;
+  }
+
+  &.el-tag--warning {
+    background-color: rgba(230, 162, 60, 0.1);
+    border-color: rgba(230, 162, 60, 0.2);
+    color: $cpq-warning;
+  }
+
+  &.el-tag--info {
+    background-color: rgba(144, 147, 153, 0.1);
+    border-color: rgba(144, 147, 153, 0.2);
+    color: $cpq-text-secondary;
+  }
+}
+
+// CPQ响应式设计
+@media screen and (max-width: 768px) {
+  .cpq-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .cpq-actions {
+    justify-content: center;
+  }
+
+  .cpq-search-card {
+    padding: 15px;
+  }
+
+  .cpq-table {
+    overflow-x: auto;
+  }
+}
+
+// CPQ动画效果
+.cpq-fade-enter-active,
+.cpq-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.cpq-fade-enter-from,
+.cpq-fade-leave-to {
+  opacity: 0;
+}
+
+.cpq-slide-up-enter-active,
+.cpq-slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.cpq-slide-up-enter-from,
+.cpq-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+// CPQ工具提示样式
+.cpq-tooltip {
+  .el-tooltip__popper {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+}
+
+// CPQ上传组件样式
+.cpq-upload {
+  .el-upload {
+    margin-bottom: 20px;
+  }
+
+  .el-upload-list {
+    margin-top: 10px;
+  }
+}
+
+// CPQ树组件样式
+.cpq-tree {
+  .el-tree {
+    background-color: $cpq-bg-light;
+
+    .el-tree-node {
+      &:hover > .el-tree-node__content {
+        background-color: rgba(64, 158, 255, 0.05);
+      }
+
+      &.is-current > .el-tree-node__content {
+        background-color: rgba(64, 158, 255, 0.1);
+        color: $cpq-primary;
+      }
+    }
+  }
+}
+
+// CPQ选择器样式
+.cpq-select {
+  .el-select {
+    width: 100%;
+
+    .el-input__inner {
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+  }
+}
+
+// CPQ输入框样式
+.cpq-input {
+  .el-input {
+    .el-input__inner {
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+  }
+}
+
+// CPQ文本域样式
+.cpq-textarea {
+  .el-input {
+    .el-textarea__inner {
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+  }
+}
+
+// CPQ日期选择器样式
+.cpq-date {
+  .el-date-editor {
+    width: 100%;
+
+    .el-input__inner {
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+  }
+}
+
+// CPQ数字输入框样式
+.cpq-number {
+  .el-input-number {
+    width: 100%;
+
+    .el-input__inner {
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+  }
+}
+
+// CPQ复选框样式
+.cpq-checkbox {
+  .el-checkbox {
+    margin-right: 16px;
+    margin-bottom: 8px;
+
+    &__input {
+      &:hover {
+        .el-checkbox__inner {
+          border-color: $cpq-primary;
+        }
+      }
+
+      &.is-checked {
+        .el-checkbox__inner {
+          background-color: $cpq-primary;
+          border-color: $cpq-primary;
+        }
+
+        + .el-checkbox__label {
+          color: $cpq-primary;
+        }
+      }
+    }
+  }
+}
+
+// CPQ单选框样式
+.cpq-radio {
+  .el-radio {
+    margin-right: 16px;
+    margin-bottom: 8px;
+
+    &__input {
+      &:hover {
+        .el-radio__inner {
+          border-color: $cpq-primary;
+        }
+      }
+
+      &.is-checked {
+        .el-radio__inner {
+          border-color: $cpq-primary;
+
+          &::after {
+            background-color: $cpq-primary;
+          }
+        }
+
+        + .el-radio__label {
+          color: $cpq-primary;
+        }
+      }
+    }
+  }
+}
+
+// CPQ开关样式
+.cpq-switch {
+  .el-switch {
+    &.is-checked {
+      .el-switch__core {
+        background-color: $cpq-primary;
+        border-color: $cpq-primary;
+      }
+    }
+
+    .el-switch__core {
+      transition: all 0.3s ease;
+
+      &:hover {
+        border-color: $cpq-primary;
+      }
+    }
+  }
+}
+
+// CPQ滑块样式
+.cpq-slider {
+  .el-slider {
+    .el-slider__button {
+      border-color: $cpq-primary;
+      background-color: $cpq-primary;
+      transition: all 0.3s ease;
+
+      &:hover {
+        border-color: $cpq-primary-light;
+        background-color: $cpq-primary-light;
+        transform: scale(1.1);
+      }
+
+      &.is-focus {
+        border-color: $cpq-primary-light;
+        background-color: $cpq-primary-light;
+        box-shadow: 0 0 0 5px rgba(64, 158, 255, 0.1);
+      }
+    }
+
+    .el-slider__bar {
+      background-color: $cpq-primary;
+    }
+  }
+}
+
+// CPQ评分样式
+.cpq-rate {
+  .el-rate {
+    .el-rate__item {
+      &.is-active {
+        color: $cpq-primary;
+      }
+
+      &:hover {
+        color: $cpq-primary-light;
+      }
+    }
+  }
+}
+
+// CPQ进度条样式
+.cpq-progress {
+  .el-progress {
+    &__bar {
+      background-color: $cpq-primary;
+    }
+  }
+}
+
+// CPQ分割线样式
+.cpq-divider {
+  .el-divider {
+    border-color: $cpq-border-light;
+
+    &--horizontal {
+      margin: 20px 0;
+    }
+
+    &--vertical {
+      margin: 0 10px;
+    }
+
+    &__text {
+      color: $cpq-text-secondary;
+      font-size: 14px;
+    }
+  }
+}
+
+// CPQ加载样式
+.cpq-loading {
+  .el-loading-mask {
+    background-color: rgba(255, 255, 255, 0.8);
+
+    .el-loading-spinner {
+      .path {
+        stroke: $cpq-primary;
+      }
+
+      .el-loading-text {
+        color: $cpq-primary;
+      }
+    }
+  }
+}
+
+// CPQ消息提示样式
+.cpq-message {
+  .el-message {
+    &--success {
+      background-color: rgba(103, 194, 58, 0.1);
+      border-color: rgba(103, 194, 58, 0.2);
+      color: $cpq-success;
+
+      .el-message__icon {
+        color: $cpq-success;
+      }
+    }
+
+    &--warning {
+      background-color: rgba(230, 162, 60, 0.1);
+      border-color: rgba(230, 162, 60, 0.2);
+      color: $cpq-warning;
+
+      .el-message__icon {
+        color: $cpq-warning;
+      }
+    }
+
+    &--error {
+      background-color: rgba(245, 108, 108, 0.1);
+      border-color: rgba(245, 108, 108, 0.2);
+      color: $cpq-danger;
+
+      .el-message__icon {
+        color: $cpq-danger;
+      }
+    }
+
+    &--info {
+      background-color: rgba(64, 158, 255, 0.1);
+      border-color: rgba(64, 158, 255, 0.2);
+      color: $cpq-primary;
+
+      .el-message__icon {
+        color: $cpq-primary;
+      }
+    }
+  }
+}
+
+// CPQ通知样式
+.cpq-notification {
+  .el-notification {
+    border-radius: 8px;
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.12);
+    transition: all 0.3s ease;
+
+    &--success {
+      background-color: rgba(103, 194, 58, 0.1);
+      border-left: 4px solid $cpq-success;
+
+      .el-notification__icon {
+        color: $cpq-success;
+      }
+    }
+
+    &--warning {
+      background-color: rgba(230, 162, 60, 0.1);
+      border-left: 4px solid $cpq-warning;
+
+      .el-notification__icon {
+        color: $cpq-warning;
+      }
+    }
+
+    &--error {
+      background-color: rgba(245, 108, 108, 0.1);
+      border-left: 4px solid $cpq-danger;
+
+      .el-notification__icon {
+        color: $cpq-danger;
+      }
+    }
+
+    &--info {
+      background-color: rgba(64, 158, 255, 0.1);
+      border-left: 4px solid $cpq-primary;
+
+      .el-notification__icon {
+        color: $cpq-primary;
+      }
+    }
+  }
+}
+
+// CPQ对话框样式增强
+.cpq-dialog {
+  .el-dialog {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.16);
+    transition: all 0.3s ease;
+
+    &__header {
+      background-color: $cpq-primary;
+      padding: 20px 24px;
+      border-bottom: none;
+
+      .el-dialog__title {
+        color: #fff;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .el-dialog__headerbtn {
+        top: 18px;
+        right: 24px;
+
+        .el-icon {
+          color: #fff;
+          font-size: 18px;
+
+          &:hover {
+            color: rgba(255, 255, 255, 0.8);
+          }
+        }
+      }
+    }
+
+    &__body {
+      padding: 24px;
+      background-color: $cpq-bg-light;
+    }
+
+    &__footer {
+      background-color: $cpq-bg;
+      padding: 16px 24px;
+      border-top: 1px solid $cpq-border-light;
+
+      .el-button {
+        border-radius: 6px;
+      }
+    }
+  }
+}
+
+// CPQ步骤条样式
+.cpq-steps {
+  .el-steps {
+    margin-bottom: 30px;
+
+    &--horizontal {
+      .el-step {
+        &:not(:last-child)::before {
+          background-color: $cpq-border;
+        }
+      }
+    }
+
+    .el-step__line {
+      background-color: $cpq-border;
+    }
+
+    .el-step__head {
+      background-color: $cpq-bg;
+      border-color: $cpq-border;
+
+      .el-step__icon {
+        color: $cpq-text-secondary;
+      }
+    }
+
+    .el-step__title {
+      color: $cpq-text-secondary;
+    }
+
+    &--finish {
+      .el-step__line {
+        background-color: $cpq-success;
+      }
+
+      .el-step__head {
+        background-color: $cpq-success;
+        border-color: $cpq-success;
+
+        .el-step__icon {
+          color: #fff;
+        }
+      }
+
+      .el-step__title {
+        color: $cpq-success;
+      }
+    }
+
+    &--process {
+      .el-step__head {
+        background-color: $cpq-primary;
+        border-color: $cpq-primary;
+
+        .el-step__icon {
+          color: #fff;
+        }
+      }
+
+      .el-step__title {
+        color: $cpq-primary;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+// CPQ标签样式增强
+.cpq-tag {
+  .el-tag {
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.12);
+    }
+  }
+}
+
+// CPQ骨架屏样式
+.cpq-skeleton {
+  .el-skeleton {
+    background-color: $cpq-bg;
+
+    .el-skeleton__item {
+      background-color: $cpq-border-light;
+      animation: cpq-skeleton-loading 1.5s infinite ease-in-out;
+    }
+  }
+}
+
+@keyframes cpq-skeleton-loading {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
