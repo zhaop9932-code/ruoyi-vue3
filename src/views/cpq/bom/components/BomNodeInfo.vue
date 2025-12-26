@@ -78,6 +78,12 @@
               :bom-structure-id="selectedNode.bomStructureId"
             />
           </el-tab-pane>
+          <el-tab-pane label="动态属性" name="dynamicProps">
+            <bom-node-dynamic-props 
+              :bom-id="bomId" 
+              :bom-structure-id="selectedNode.bomStructureId"
+            />
+          </el-tab-pane>
           <el-tab-pane label="其他" name="other">
             <bom-node-other-info 
               :bom-id="bomId" 

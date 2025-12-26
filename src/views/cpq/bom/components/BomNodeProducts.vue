@@ -63,55 +63,55 @@
           </el-form-item>
           
           <!-- 具体型号选择 -->
-          <el-form-item v-if="productForm.relationType === '1'" label="产品型号" prop="relationObjectIds">
-            <el-select 
-              v-model="productForm.relationObjectIds" 
-              placeholder="请选择产品型号" 
-              filterable
-              collapse-tags
-            >
-              <el-option
-                v-for="product in availableProducts"
-                :key="product.productId"
-                :label="`${product.productCode} - ${product.productName}`"
-                :value="product.productId"
-              />
-            </el-select>
-          </el-form-item>
-          
-          <!-- 产品系列选择 -->
-          <el-form-item v-else-if="productForm.relationType === '2'" label="产品系列" prop="relationObjectIds">
-            <el-select 
-              v-model="productForm.relationObjectIds" 
-              placeholder="请选择产品系列" 
-              filterable
-              collapse-tags
-            >
-              <el-option
-                v-for="series in availableSeries"
-                :key="series.seriesId"
-                :label="series.seriesName"
-                :value="series.seriesId"
-              />
-            </el-select>
-          </el-form-item>
-          
-          <!-- 产品类目选择 -->
-          <el-form-item v-else-if="productForm.relationType === '3'" label="产品类目" prop="relationObjectIds">
-            <el-select 
-              v-model="productForm.relationObjectIds" 
-              placeholder="请选择产品类目" 
-              filterable
-              collapse-tags
-            >
-              <el-option
-                v-for="catalog in availableCatalogs"
-                :key="catalog.catalogId"
-                :label="catalog.catalogName"
-                :value="catalog.catalogId"
-              />
-            </el-select>
-          </el-form-item>
+        <el-form-item v-if="productForm.relationType === '1'" label="产品型号" prop="relationObjectIds">
+          <el-select 
+            v-model="productForm.relationObjectIds" 
+            placeholder="请选择产品型号" 
+            filterable
+            collapse-tags
+          >
+            <el-option
+              v-for="product in filteredProducts"
+              :key="product.productId"
+              :label="`${product.productCode} - ${product.productName}`"
+              :value="product.productId"
+            />
+          </el-select>
+        </el-form-item>
+        
+        <!-- 产品系列选择 -->
+        <el-form-item v-else-if="productForm.relationType === '2'" label="产品系列" prop="relationObjectIds">
+          <el-select 
+            v-model="productForm.relationObjectIds" 
+            placeholder="请选择产品系列" 
+            filterable
+            collapse-tags
+          >
+            <el-option
+              v-for="series in filteredSeries"
+              :key="series.seriesId"
+              :label="series.seriesName"
+              :value="series.seriesId"
+            />
+          </el-select>
+        </el-form-item>
+        
+        <!-- 产品类目选择 -->
+        <el-form-item v-else-if="productForm.relationType === '3'" label="产品类目" prop="relationObjectIds">
+          <el-select 
+            v-model="productForm.relationObjectIds" 
+            placeholder="请选择产品类目" 
+            filterable
+            collapse-tags
+          >
+            <el-option
+              v-for="catalog in filteredCatalogs"
+              :key="catalog.catalogId"
+              :label="catalog.catalogName"
+              :value="catalog.catalogId"
+            />
+          </el-select>
+        </el-form-item>
         </template>
         
         <!-- 新增模式使用标签页布局 -->
@@ -448,26 +448,124 @@ const selectedProductIds = ref([])
 const selectedSeriesIds = ref([])
 const selectedCatalogIds = ref([])
 
-// 筛选后的列表
+// 获取已关联的ID列表（排除当前正在编辑的项）
+const getLinkedIds = (type) => {
+  // 处理数据类型匹配问题：字符串和数字类型都要匹配
+  const typeNum = Number(type)
+  const typeStr = String(type)
+  
+  const linkedItems = productList.value
+    .filter(item => {
+      const itemType = item.relationType
+      // 检查多种可能的数据类型匹配
+      const typeMatch = itemType === typeNum || itemType === typeStr || String(itemType) === typeStr || Number(itemType) === typeNum
+      
+      console.log(`检查产品 ${item.relationObjectId} 的类型匹配:`, {
+        itemType,
+        type,
+        typeNum,
+        typeStr,
+        typeMatch
+      })
+      
+      return typeMatch && item.relationId !== productForm.relationId
+    })
+    .map(item => item.relationObjectId)
+  
+  console.log(`获取类型 ${type} 的已关联ID:`, linkedItems)
+  console.log('当前产品列表:', productList.value)
+  
+  return linkedItems
+}
+
+// 筛选后的列表（过滤已关联的数据）
 const filteredProducts = computed(() => {
-  if (!productSearch.value) {
-    return availableProducts.value
+  const linkedProductIds = getLinkedIds('1')
+  console.log('已关联的产品ID列表:', linkedProductIds)
+  console.log('可选产品列表:', availableProducts.value)
+  
+  let filtered = availableProducts.value.filter(product => {
+    // 检查多种可能的数据类型匹配
+    const isLinked = linkedProductIds.includes(product.productId) || 
+                    linkedProductIds.includes(String(product.productId)) ||
+                    linkedProductIds.includes(Number(product.productId))
+    console.log(`产品 ${product.productId} (${product.productName}) 是否已关联:`, isLinked)
+    return !isLinked
+  })
+  
+  if (productSearch.value) {
+    const searchValue = productSearch.value.toLowerCase()
+    filtered = filtered.filter(product => 
+      product.productCode.toLowerCase().includes(searchValue) ||
+      product.productName.toLowerCase().includes(searchValue)
+    )
   }
-  const searchValue = productSearch.value.toLowerCase()
-  return availableProducts.value.filter(product => 
-    product.productCode.toLowerCase().includes(searchValue) ||
-    product.productName.toLowerCase().includes(searchValue)
-  )
+  
+  console.log('过滤后的产品列表:', filtered)
+  return filtered
 })
 
 const filteredSeries = computed(() => {
-  if (!seriesSearch.value) {
-    return availableSeries.value
-  }
-  const searchValue = seriesSearch.value.toLowerCase()
-  return availableSeries.value.filter(series => 
-    series.seriesName.toLowerCase().includes(searchValue)
+  const linkedSeriesIds = getLinkedIds('2')
+  let filtered = availableSeries.value.filter(series => 
+    !linkedSeriesIds.includes(series.seriesId)
   )
+  
+  if (seriesSearch.value) {
+    const searchValue = seriesSearch.value.toLowerCase()
+    filtered = filtered.filter(series => 
+      series.seriesName.toLowerCase().includes(searchValue)
+    )
+  }
+  
+  return filtered
+})
+
+
+
+// 过滤已关联的分类树数据（同时支持搜索过滤）
+const filteredCatalogTree = computed(() => {
+  const linkedCatalogIds = getLinkedIds('3')
+  
+  // 先过滤已关联的数据
+  const filterLinkedTree = (nodes) => {
+    return nodes.filter(node => !linkedCatalogIds.includes(node.catalogId))
+      .map(node => ({
+        ...node,
+        children: node.children ? filterLinkedTree(node.children) : []
+      }))
+  }
+  
+  let filteredTree = filterLinkedTree(catalogTreeData.value)
+  
+  // 如果有关键词搜索，再进行搜索过滤
+  if (catalogSearch.value) {
+    const searchValue = catalogSearch.value.toLowerCase()
+    
+    const filterSearchTree = (nodes) => {
+      return nodes.reduce((acc, node) => {
+        const nameMatch = node.catalogName.toLowerCase().includes(searchValue)
+        let children = []
+        
+        if (node.children && node.children.length > 0) {
+          children = filterSearchTree(node.children)
+        }
+        
+        if (nameMatch || children.length > 0) {
+          acc.push({
+            ...node,
+            children
+          })
+        }
+        
+        return acc
+      }, [])
+    }
+    
+    filteredTree = filterSearchTree(filteredTree)
+  }
+  
+  return filteredTree
 })
 
 // 计算已选择数量
@@ -718,38 +816,6 @@ const handleCatalogTreeCheck = (data, checked, indeterminate) => {
   }
 }
 
-// 简化的分类树过滤，仅用于展示，避免修改原始数据结构
-const filteredCatalogTree = computed(() => {
-  if (!catalogSearch.value) {
-    return catalogTreeData.value
-  }
-  
-  const searchValue = catalogSearch.value.toLowerCase()
-  
-  // 过滤分类树的递归函数
-  const filterTree = (nodes) => {
-    return nodes.reduce((acc, node) => {
-      const nameMatch = node.catalogName.toLowerCase().includes(searchValue)
-      let children = []
-      
-      if (node.children && node.children.length > 0) {
-        children = filterTree(node.children)
-      }
-      
-      if (nameMatch || children.length > 0) {
-        acc.push({
-          ...node,
-          children
-        })
-      }
-      
-      return acc
-    }, [])
-  }
-  
-  return filterTree(catalogTreeData.value)
-})
-
 // 分类列表数据，用于兼容原有代码
 const filteredCatalogs = computed(() => {
   // 从分类树中提取所有节点
@@ -770,14 +836,21 @@ const filteredCatalogs = computed(() => {
   
   const allCatalogs = getAllCatalogs(catalogTreeData.value)
   
-  if (!catalogSearch.value) {
-    return allCatalogs
+  // 过滤已关联的分类
+  const linkedCatalogIds = getLinkedIds('3')
+  let filtered = allCatalogs.filter(catalog => 
+    !linkedCatalogIds.includes(catalog.catalogId)
+  )
+  
+  // 如果有关键词搜索，再进行搜索过滤
+  if (catalogSearch.value) {
+    const searchValue = catalogSearch.value.toLowerCase()
+    filtered = filtered.filter(catalog => 
+      catalog.catalogName.toLowerCase().includes(searchValue)
+    )
   }
   
-  const searchValue = catalogSearch.value.toLowerCase()
-  return allCatalogs.filter(catalog => 
-    catalog.catalogName.toLowerCase().includes(searchValue)
-  )
+  return filtered
 })
 
 // 更新loadCatalogs函数，确保分类树数据也被更新
@@ -795,19 +868,25 @@ const loadProductList = async () => {
   loading.value = true
   
   try {
+    console.log('开始加载关联产品列表，bomId:', props.bomId, 'bomStructureId:', props.bomStructureId)
+    
     let response
     
     // 根据structureId是否存在选择不同的API
     if (props.bomStructureId) {
       // 如果structureId存在，使用带结构ID的新API
+      console.log('使用带结构ID的API')
       response = await getSuperBomProductRelationByBomIdAndStructureId({
         bomId: props.bomId,
         structureId: props.bomStructureId
       })
     } else {
       // 如果structureId不存在，使用旧的API
+      console.log('使用不带结构ID的API')
       response = await getSuperBomProductRelationByBomId(props.bomId)
     }
+    
+    console.log('API响应:', response)
     
     let data = []
     
@@ -820,8 +899,11 @@ const loadProductList = async () => {
       data = response.rows || response.data || []
     }
     
+    console.log('解析后的数据:', data)
     productList.value = data
     loading.value = false
+    
+    console.log('关联产品列表加载完成，数据量:', data.length)
     return data
   } catch (error) {
     console.error('加载关联产品列表失败:', error)
@@ -842,9 +924,10 @@ const handleAddProduct = () => {
   dialogTitle.value = '新增关联产品'
   dialogVisible.value = true
   
-  // 预加载产品数据和分类树数据
+  // 预加载产品数据和分类树数据，并重新加载已关联产品列表
   loadProducts()
   loadCatalogTree()
+  loadProductList() // 确保获取最新的已关联产品数据
 }
 
 // 编辑关联产品

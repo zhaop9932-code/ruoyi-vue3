@@ -125,16 +125,19 @@
             
             <el-tab-pane label="条件配置" name="condition">
               <rule-condition-config
-                v-model="selectedRule.conditions"
-                :rule-type="selectedRule.ruleType"
-                @update:conditions="updateRuleExpression"
-              />
+              v-model="selectedRule.conditions"
+              :rule-type="selectedRule.ruleType"
+              :bom-id="props.bomId"
+              :rule-id="selectedRule?.ruleId"
+              @update:conditions="updateRuleExpression"
+            />
             </el-tab-pane>
             
             <el-tab-pane label="动作配置" name="action">
               <rule-action-config
                 v-model="selectedRule.actions"
                 :rule-type="selectedRule.ruleType"
+                :rule-id="selectedRule?.ruleId"
                 @update:actions="updateRuleExpression"
               />
             </el-tab-pane>

@@ -36,9 +36,8 @@ export function listSuperBomStructure(query) {
 // 获取BOM结构详情
 export function getSuperBomStructureInfo(bomStructureId) {
   return request({
-    url: '/cpq/superBomStructure/getInfo',
-    method: 'post',
-    data: bomStructureId
+    url: `/cpq/superBomStructure/getInfo/${bomStructureId}`,
+    method: 'get'
   })
 }
 

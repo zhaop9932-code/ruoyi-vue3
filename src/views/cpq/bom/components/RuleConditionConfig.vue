@@ -17,6 +17,13 @@
                 <el-icon><Plus /></el-icon> {{ type.label }}
               </el-button>
             </div>
+            <el-button 
+              type="primary" 
+              size="small" 
+              @click="handleSave"
+            >
+              <el-icon><Check /></el-icon> 保存条件
+            </el-button>
           </div>
         </div>
       </template>
@@ -27,7 +34,7 @@
       
       <draggable 
         v-model="conditions" 
-        item-key="id"
+        item-key="conditionId"
         handle=".drag-handle"
         ghost-class="ghost"
       >
@@ -83,37 +90,51 @@
                 <el-form :model="element" label-position="top" label-width="100px">
                   <el-row :gutter="20">
                     <el-col :span="12">
-                      <el-form-item label="判断类型">
-                        <el-select v-model="element.judgeType" placeholder="请选择判断类型">
-                          <el-option 
-                            v-for="judgeType in judgeTypes" 
-                            :key="judgeType.value"
-                            :label="judgeType.label"
-                            :value="judgeType.value"
-                          />
-                        </el-select>
-                      </el-form-item>
-                    </el-col>
+                        <el-form-item label="判断类型">
+                          <el-select 
+                            v-model="element.judgeType" 
+                            placeholder="请选择判断类型"
+                            @change="handleJudgeTypeChange(element)"
+                          >
+                            <el-option 
+                              v-for="judgeType in judgeTypes" 
+                              :key="judgeType.value"
+                              :label="judgeType.label"
+                              :value="judgeType.value"
+                            />
+                          </el-select>
+                        </el-form-item>
+                      </el-col>
                     
                     <!-- 节点选择，仅当判断类型为非变量时显示 -->
                     <el-col :span="12" v-if="element.judgeType !== 'variable'">
                       <el-form-item label="节点">
-                        <el-select v-model="element.node" placeholder="请选择节点">
-                          <el-option 
-                            v-for="node in bomNodes" 
-                            :key="node.value"
-                            :label="node.label"
-                            :value="node.value"
-                          />
-                        </el-select>
+                        <el-cascader
+                          v-model="element.node"
+                          :options="bomNodesOptions"
+                          :props="cascaderProps"
+                          placeholder="请选择节点"
+                          :loading="bomNodesLoading"
+                          filterable
+                          clearable
+                          @change="handleNodeChange(element)"
+                          :collapse-tags="true"
+                        />
                       </el-form-item>
                     </el-col>
                   </el-row>
                   
                   <el-row :gutter="20">
-                    <el-col :span="12">
+                    <!-- 字段选择，当判断类型为节点产品时隐藏 -->
+                    <el-col :span="12" v-if="element.judgeType !== 'nodeProduct'">
                       <el-form-item label="字段">
-                        <el-select v-model="element.field" placeholder="请选择字段">
+                        <el-select 
+                          v-model="element.field" 
+                          placeholder="请选择字段"
+                          :loading="fieldsLoading"
+                          @visible-change="handleFieldsVisibleChange(element)"
+                          @change="handleFieldChange(element)"
+                        >
                           <el-option 
                             v-for="field in getFieldsByJudgeTypeAndNode(element.judgeType, element.node)" 
                             :key="field.value"
@@ -126,7 +147,7 @@
                     
                     <el-col :span="12">
                       <el-form-item label="操作符">
-                        <el-select v-model="element.operator" placeholder="请选择操作符">
+                        <el-select v-model="element.operator" placeholder="请选择操作符" @change="handleOperatorChange(element)">
                           <el-option 
                             v-for="op in getOperatorsByType(element.type)" 
                             :key="op.value"
@@ -138,7 +159,7 @@
                     </el-col>
                   </el-row>
                   
-                  <el-row :gutter="20">
+                  <el-row :gutter="20" v-if="element.operator && element.operator !== 'is_empty' && element.operator !== 'is_not_empty'">
                     <el-col :span="24">
                       <el-form-item label="值">
                         <template v-if="element.type === 'number'">
@@ -155,9 +176,12 @@
                         </template>
                         <template v-else-if="element.type === 'select'">
                           <el-select v-model="element.value" placeholder="请选择值">
-                            <el-option label="选项1" value="option1" />
-                            <el-option label="选项2" value="option2" />
-                            <el-option label="选项3" value="option3" />
+                            <el-option 
+                              v-for="option in getAttributeOptions(element)" 
+                              :key="option.value"
+                              :label="option.label"
+                              :value="option.value"
+                            />
                           </el-select>
                         </template>
                         <template v-else-if="element.type === 'date'">
@@ -203,7 +227,7 @@
                 <div class="nested-conditions">
                   <draggable 
                     v-model="element.children" 
-                    item-key="id"
+                    item-key="conditionId"
                     handle=".drag-handle"
                     ghost-class="ghost"
                   >
@@ -236,7 +260,11 @@
                             <el-row :gutter="20">
                               <el-col :span="12">
                                 <el-form-item label="判断类型">
-                                  <el-select v-model="childElement.judgeType" placeholder="请选择判断类型">
+                                  <el-select 
+                                    v-model="childElement.judgeType" 
+                                    placeholder="请选择判断类型"
+                                    @change="handleJudgeTypeChange(childElement)"
+                                  >
                                     <el-option 
                                       v-for="judgeType in judgeTypes" 
                                       :key="judgeType.value"
@@ -250,35 +278,44 @@
                               <!-- 节点选择，仅当判断类型为非变量时显示 -->
                               <el-col :span="12" v-if="childElement.judgeType !== 'variable'">
                                 <el-form-item label="节点">
-                                  <el-select v-model="childElement.node" placeholder="请选择节点">
-                                    <el-option 
-                                      v-for="node in bomNodes" 
-                                      :key="node.value"
-                                      :label="node.label"
-                                      :value="node.value"
-                                    />
-                                  </el-select>
+                                  <el-cascader
+                                    v-model="childElement.node"
+                                    :options="bomNodesOptions"
+                                    :props="cascaderProps"
+                                    placeholder="请选择节点"
+                                    :loading="bomNodesLoading"
+                                    filterable
+                                    clearable
+                                    @change="handleNodeChange(childElement)"
+                                    :collapse-tags="true"
+                                  />
                                 </el-form-item>
                               </el-col>
                             </el-row>
                             
                             <el-row :gutter="20">
-                              <el-col :span="12">
+                              <!-- 字段选择，当判断类型为节点产品时隐藏 -->
+                              <el-col :span="12" v-if="childElement.judgeType !== 'nodeProduct'">
                                 <el-form-item label="字段">
-                                  <el-select v-model="childElement.field" placeholder="请选择字段">
-                                    <el-option 
-                                      v-for="field in getFieldsByJudgeTypeAndNode(childElement.judgeType, childElement.node)" 
-                                      :key="field.value"
-                                      :label="field.label"
-                                      :value="field.value"
-                                    />
-                                  </el-select>
-                                </el-form-item>
+                                <el-select 
+                                  v-model="childElement.field" 
+                                  placeholder="请选择字段"
+                                  :loading="fieldsLoading"
+                                  @visible-change="handleFieldsVisibleChange(childElement)"
+                                >
+                                  <el-option 
+                                    v-for="field in getFieldsByJudgeTypeAndNode(childElement.judgeType, childElement.node)" 
+                                    :key="field.value"
+                                    :label="field.label"
+                                    :value="field.value"
+                                  />
+                                </el-select>
+                              </el-form-item>
                               </el-col>
                               
                               <el-col :span="12">
                                 <el-form-item label="操作符">
-                                  <el-select v-model="childElement.operator" placeholder="请选择操作符">
+                                  <el-select v-model="childElement.operator" placeholder="请选择操作符" @change="handleOperatorChange(childElement)">
                                     <el-option 
                                       v-for="op in getOperatorsByType(childElement.type)" 
                                       :key="op.value"
@@ -290,7 +327,7 @@
                               </el-col>
                             </el-row>
                             
-                            <el-row :gutter="20">
+                            <el-row :gutter="20" v-if="childElement.operator && childElement.operator !== 'is_empty' && childElement.operator !== 'is_not_empty'">
                               <el-col :span="24">
                                 <el-form-item label="值">
                                   <template v-if="childElement.type === 'number'">
@@ -307,9 +344,12 @@
                                   </template>
                                   <template v-else-if="childElement.type === 'select'">
                                     <el-select v-model="childElement.value" placeholder="请选择值">
-                                      <el-option label="选项1" value="option1" />
-                                      <el-option label="选项2" value="option2" />
-                                      <el-option label="选项3" value="option3" />
+                                      <el-option 
+                                        v-for="option in getAttributeOptions(childElement)" 
+                                        :key="option.value"
+                                        :label="option.label"
+                                        :value="option.value"
+                                      />
                                     </el-select>
                                   </template>
                                   <template v-else-if="childElement.type === 'date'">
@@ -387,9 +427,45 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { Plus, Delete, Rank, ChatDotRound } from '@element-plus/icons-vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { Plus, Delete, Rank, ChatDotRound, Check } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import draggable from 'vuedraggable'
+
+// 导入BOM结构API
+import {
+  listByBomId
+} from '@/api/cpq/superBomStructure'
+
+// 导入BOM属性API
+import {
+  listSuperBomStructureAttributeByBomStructureId,
+  listSuperBomStructureAttributeValueByBomStructureIdAndAttributeId,
+  getSuperBomStructureAttributeValue
+} from '@/api/cpq/bom'
+
+// 导入超级BOM变量API
+import {
+  getSuperBomVariableByBomId
+} from '@/api/cpq/superBomVariable'
+
+// 导入动态属性API
+import {
+  getSuperBomDynamicAttributeByBomStructureId
+} from '@/api/cpq/superBomDynamicAttribute'
+
+// 导入产品关联API
+import {
+  getSuperBomProductRelationByBomIdAndStructureId
+} from '@/api/cpq/superBomProductRelation'
+
+// 导入规则条件API
+import {
+  saveRuleCondition,
+  updateRuleCondition,
+  listRuleConditionsByRuleId,
+  deleteRuleCondition
+} from '@/api/cpq/ruleCondition'
 
 const props = defineProps({
   modelValue: {
@@ -399,6 +475,14 @@ const props = defineProps({
   ruleType: {
     type: String,
     default: 'validation'
+  },
+  bomId: {
+    type: [String, Number],
+    default: null
+  },
+  ruleId: {
+    type: [String, Number],
+    default: null
   }
 })
 
@@ -421,7 +505,7 @@ const conditionTypes = [
   { label: '数值条件', value: 'number' },
   { label: '文本条件', value: 'text' },
   { label: '选择条件', value: 'select' },
-  { label: '日期条件', value: 'date' },
+  // { label: '日期条件', value: 'date' },
   { label: '布尔条件', value: 'boolean' }
 ]
 
@@ -439,55 +523,384 @@ const judgeTypes = [
   { label: '节点产品', value: 'nodeProduct' }
 ]
 
-// 模拟超级BOM节点数据
-const bomNodes = [
-  { label: '节点1', value: 'node1' },
-  { label: '节点2', value: 'node2' },
-  { label: '节点3', value: 'node3' },
-  { label: '节点4', value: 'node4' }
-]
+// 超级BOM节点数据（树结构）
+const bomNodes = ref([])
+const bomNodeTree = ref([])
+const bomNodesOptions = ref([])
+const bomNodesLoading = ref(false)
 
-// 模拟超级BOM变量数据
-const bomVariables = [
-  { label: '变量1', value: 'var1' },
-  { label: '变量2', value: 'var2' },
-  { label: '变量3', value: 'var3' }
-]
-
-// 模拟节点静态属性数据
-const nodeStaticAttrs = {
-  node1: [
-    { label: '属性1', value: 'attr1' },
-    { label: '属性2', value: 'attr2' }
-  ],
-  node2: [
-    { label: '属性3', value: 'attr3' },
-    { label: '属性4', value: 'attr4' }
-  ]
+// 级联选择器配置
+const cascaderProps = {
+  value: 'bomStructureId',
+  label: 'nodeName',
+  children: 'children',
+  multiple: false,
+  checkStrictly: false,
+  emitPath: false
 }
 
-// 模拟节点动态属性数据
-const nodeDynamicAttrs = {
-  node1: [
-    { label: '动态属性1', value: 'dynAttr1' },
-    { label: '动态属性2', value: 'dynAttr2' }
-  ],
-  node2: [
-    { label: '动态属性3', value: 'dynAttr3' },
-    { label: '动态属性4', value: 'dynAttr4' }
-  ]
+// 加载BOM节点树
+const loadBomNodes = async () => {
+  if (!props.bomId) {
+    console.warn('BOM ID为空，无法加载节点')
+    return
+  }
+  
+  bomNodesLoading.value = true
+  try {
+    console.log('开始加载BOM节点，bomId:', props.bomId)
+    const response = await listByBomId(props.bomId)
+    console.log('API响应:', response)
+    
+    // 处理不同的响应格式
+    let flatData = []
+    if (Array.isArray(response)) {
+      flatData = response
+    } else if (response.data && Array.isArray(response.data)) {
+      flatData = response.data
+    } else if (response.rows && Array.isArray(response.rows)) {
+      flatData = response.rows
+    } else {
+      console.warn('未知的响应格式:', response)
+      ElMessage.warning('BOM节点数据格式错误')
+      return
+    }
+    
+    console.log('处理后的数据:', flatData)
+    
+    // 将平级数据转换为树形结构
+    bomNodeTree.value = convertListToTree(flatData)
+    console.log('树形结构:', bomNodeTree.value)
+    
+    // 转换为下拉选项格式
+    const flattenNodes = (nodes, parentPath = '') => {
+      let result = []
+      nodes.forEach(node => {
+        const label = parentPath ? `${parentPath} > ${node.nodeName}` : node.nodeName
+        console.log('处理节点:', node, '标签:', label)
+        result.push({
+          label,
+          value: node.bomStructureId
+        })
+        if (node.children && node.children.length > 0) {
+          result = result.concat(flattenNodes(node.children, label))
+        }
+      })
+      return result
+    }
+    
+    bomNodes.value = flattenNodes(bomNodeTree.value)
+    bomNodesOptions.value = bomNodeTree.value
+    console.log('下拉选项:', bomNodes.value)
+    console.log('级联选项:', bomNodesOptions.value)
+    
+    if (bomNodes.value.length === 0) {
+      console.warn('没有找到BOM节点数据')
+      ElMessage.info('当前BOM没有节点数据')
+    }
+  } catch (error) {
+    console.error('加载BOM节点失败:', error)
+    ElMessage.error('加载BOM节点失败')
+  } finally {
+    bomNodesLoading.value = false
+  }
 }
 
-// 模拟节点产品数据
-const nodeProducts = {
-  node1: [
-    { label: '产品1', value: 'prod1' },
-    { label: '产品2', value: 'prod2' }
-  ],
-  node2: [
-    { label: '产品3', value: 'prod3' },
-    { label: '产品4', value: 'prod4' }
-  ]
+// 将列表数据转换为树状结构
+const convertListToTree = (list) => {
+  if (!Array.isArray(list) || list.length === 0) {
+    return []
+  }
+  
+  const tree = []
+  const map = new Map()
+  
+  // 构建节点映射，确保每个节点都有children属性
+  list.forEach(item => {
+    map.set(item.bomStructureId, {
+      ...item,
+      children: []
+    })
+  })
+  
+  // 构建树状结构
+  list.forEach(item => {
+    const node = map.get(item.bomStructureId)
+    const parentNodeId = item.parentNodeId || 0
+    
+    if (parentNodeId === 0 || !map.has(parentNodeId)) {
+      // 根节点
+      tree.push(node)
+    } else {
+      // 子节点
+      const parentNode = map.get(parentNodeId)
+      parentNode.children.push(node)
+    }
+  })
+  
+  return tree
+}
+
+// 监听BOM ID变化，重新加载节点和变量
+watch(() => props.bomId, (newBomId) => {
+  if (newBomId) {
+    loadBomNodes()
+    loadBomVariables()
+  } else {
+    bomNodes.value = []
+    bomNodeTree.value = []
+    bomVariables.value = []
+  }
+})
+
+// 监听规则ID变化，重新加载条件
+watch(() => props.ruleId, (newRuleId) => {
+  if (newRuleId) {
+    loadConditionsByRuleId(newRuleId)
+  } else {
+    conditions.value = [...props.modelValue]
+  }
+})
+
+// 加载规则条件
+const loadConditionsByRuleId = async (ruleId) => {
+  if (!ruleId) return
+  
+  try {
+    const response = await listRuleConditionsByRuleId(ruleId)
+    if (response.code === 200) {
+      conditions.value = response.data || []
+    } else {
+      ElMessage.error('加载条件失败：' + response.message)
+    }
+  } catch (error) {
+    console.error('加载条件失败:', error)
+    ElMessage.error('加载条件失败')
+  }
+}
+
+// 节点选择变化处理
+const handleNodeChange = (element) => {
+  // 级联选择器返回的是选中的值本身（因为emitPath: false）
+  console.log('节点选择变化:', element.node)
+  
+  // 清空当前字段选择和值选择
+  element.field = ''
+  element.value = ''
+  
+  // 清除该节点的所有缓存，确保每次更换节点都能获取最新数据
+  if (element.node) {
+    dynamicFields.value.staticAttrs.delete(element.node)
+    dynamicFields.value.dynamicAttrs.delete(element.node)
+    dynamicFields.value.products.delete(element.node)
+  }
+  
+  // 根据判断类型加载对应的字段数据
+  if (element.judgeType !== 'variable' && element.node) {
+    loadFieldsByJudgeTypeAndNode(element.judgeType, element.node, element)
+  }
+}
+
+// 加载字段数据
+const loadFieldsByJudgeTypeAndNode = async (judgeType, bomStructureId, element) => {
+  if (!bomStructureId) return
+  
+  fieldsLoading.value = true
+  try {
+    switch (judgeType) {
+      case 'nodeStaticAttr':
+        await loadStaticAttrs(bomStructureId)
+        break
+      case 'nodeDynamicAttr':
+        await loadDynamicAttrs(bomStructureId)
+        break
+      case 'nodeProduct':
+        await loadProductFields(bomStructureId)
+        break
+    }
+  } catch (error) {
+    console.error('加载字段数据失败:', error)
+    ElMessage.error('加载字段数据失败')
+  } finally {
+    fieldsLoading.value = false
+    // 确保字段下拉列表更新，即使结果为空
+    // 这里我们通过触发一个响应式更新来确保下拉列表重新渲染
+    console.log('字段数据加载完成，当前节点字段数:', getFieldsByJudgeTypeAndNode(judgeType, bomStructureId).length)
+  }
+}
+
+// 加载静态属性
+const loadStaticAttrs = async (bomStructureId) => {
+  if (dynamicFields.value.staticAttrs.has(bomStructureId)) return
+  
+  try {
+    const response = await listSuperBomStructureAttributeByBomStructureId(bomStructureId)
+    
+    // 正确处理各种响应格式
+    let staticAttrs = []
+    if (Array.isArray(response)) {
+      // 直接返回数组
+      staticAttrs = response
+    } else if (response.data) {
+      // 响应包含data字段
+      if (Array.isArray(response.data)) {
+        staticAttrs = response.data
+      } else if (response.data.rows && Array.isArray(response.data.rows)) {
+        // 有些API可能返回rows字段
+        staticAttrs = response.data.rows
+      }
+    }
+    
+    console.log('加载静态属性成功，数量:', staticAttrs.length)
+    
+    // 保存完整的属性信息，包括属性值
+    const attrs = staticAttrs.map(attr => ({
+      label: attr.attributeName,
+      value: attr.attributeCode || attr.attributeName,
+      ...attr
+    }))
+    
+    dynamicFields.value.staticAttrs.set(bomStructureId, attrs)
+  } catch (error) {
+    console.error('加载静态属性失败:', error)
+    // 即使失败，也要设置空数组，确保下拉列表能正确更新
+    dynamicFields.value.staticAttrs.set(bomStructureId, [])
+  }
+}
+
+// 加载动态属性
+const loadDynamicAttrs = async (bomStructureId) => {
+  if (dynamicFields.value.dynamicAttrs.has(bomStructureId)) return
+  
+  try {
+    const response = await getSuperBomDynamicAttributeByBomStructureId(bomStructureId)
+    
+    // 正确处理各种响应格式
+    let dynamicAttrs = []
+    if (Array.isArray(response)) {
+      // 直接返回数组
+      dynamicAttrs = response
+    } else if (response.data) {
+      // 响应包含data字段
+      if (Array.isArray(response.data)) {
+        dynamicAttrs = response.data
+      } else if (response.data.rows && Array.isArray(response.data.rows)) {
+        // 有些API可能返回rows字段
+        dynamicAttrs = response.data.rows
+      }
+    }
+    
+    console.log('加载动态属性成功，数量:', dynamicAttrs.length)
+    
+    // 保存完整的属性信息，包括属性值
+    const attrs = dynamicAttrs.map(attr => ({
+      label: attr.attributeName,
+      value: attr.attributeCode || attr.attributeName,
+      ...attr
+    }))
+    
+    dynamicFields.value.dynamicAttrs.set(bomStructureId, attrs)
+  } catch (error) {
+    console.error('加载动态属性失败:', error)
+    // 即使失败，也要设置空数组，确保下拉列表能正确更新
+    dynamicFields.value.dynamicAttrs.set(bomStructureId, [])
+  }
+}
+
+// 加载产品字段
+const loadProductFields = async (bomStructureId) => {
+  if (dynamicFields.value.products.has(bomStructureId)) return
+  
+  try {
+    // 使用正确的API函数名和参数格式
+    const response = await getSuperBomProductRelationByBomIdAndStructureId({
+      bomId: props.bomId,
+      bomStructureId: bomStructureId
+    })
+    
+    // 正确处理各种响应格式
+    let productRelations = []
+    if (Array.isArray(response)) {
+      // 直接返回数组
+      productRelations = response
+    } else if (response.data) {
+      // 响应包含data字段
+      if (Array.isArray(response.data)) {
+        productRelations = response.data
+      } else if (response.data.rows && Array.isArray(response.data.rows)) {
+        // 有些API可能返回rows字段
+        productRelations = response.data.rows
+      }
+    }
+    
+    console.log('加载产品字段成功，数量:', productRelations.length)
+    
+    const productFields = []
+    productRelations.forEach(relation => {
+      // 直接使用relationObjectName作为字段标签
+      productFields.push({
+        label: relation.relationObjectName,
+        value: relation.relationObjectId
+      })
+    })
+    
+    dynamicFields.value.products.set(bomStructureId, productFields)
+  } catch (error) {
+    console.error('加载产品字段失败:', error)
+    // 即使失败，也要设置空数组，确保下拉列表能正确更新
+    dynamicFields.value.products.set(bomStructureId, [])
+  }
+}
+
+// 组件挂载时加载节点和变量
+onMounted(() => {
+  if (props.bomId) {
+    loadBomNodes()
+    loadBomVariables()
+  }
+  
+  if (props.ruleId) {
+    loadConditionsByRuleId(props.ruleId)
+  }
+})
+
+// 动态字段数据管理
+const dynamicFields = ref({
+  staticAttrs: new Map(), // key: bomStructureId, value: [{ label, value, ...attr }]
+  dynamicAttrs: new Map(), // key: bomStructureId, value: [{ label, value, ...attr }]
+  products: new Map() // key: bomStructureId, value: [{ label, value }]
+})
+
+// 字段加载状态
+const fieldsLoading = ref(false)
+
+// 变量数据（响应式，从API获取）
+const bomVariables = ref([])
+
+// 加载当前BOM的变量列表
+const loadBomVariables = async () => {
+  if (!props.bomId) {
+    bomVariables.value = []
+    return
+  }
+  
+  try {
+    const response = await getSuperBomVariableByBomId(props.bomId)
+    
+    // 处理API响应，转换为选项格式
+    if (response.data && Array.isArray(response.data)) {
+      bomVariables.value = response.data.map(variable => ({
+        label: variable.variableName,
+        value: variable.variableCode
+      }))
+    } else {
+      bomVariables.value = []
+    }
+  } catch (error) {
+    console.error('加载变量列表失败:', error)
+    bomVariables.value = []
+    ElMessage.error('加载变量列表失败')
+  }
 }
 
 // 根据条件类型获取操作符
@@ -533,20 +946,161 @@ const getOperatorsByType = (type) => {
   return operators[type] || []
 }
 
+// 字段选择下拉框可见时加载字段
+const handleFieldsVisibleChange = (element) => {
+  if (element.judgeType !== 'variable' && element.node && !element.field) {
+    loadFieldsByJudgeTypeAndNode(element.judgeType, element.node, element)
+  }
+}
+
+// 判断类型变化处理
+const handleJudgeTypeChange = (element) => {
+  // 清空当前字段选择和值选择
+  element.field = ''
+  element.value = ''
+  
+  // 根据判断类型加载对应的字段数据
+  if (element.judgeType !== 'variable' && element.node) {
+    loadFieldsByJudgeTypeAndNode(element.judgeType, element.node, element)
+  }
+}
+
+// 字段选择变化处理
+const handleFieldChange = async (element) => {
+  // 当选择字段后，需要加载该字段的属性值
+  if (element.type === 'select' && element.node && element.field) {
+    console.log('字段选择变化:', element.field)
+    
+    // 只有静态属性才需要调用API获取属性值
+    if (element.judgeType === 'nodeStaticAttr') {
+      // 查找当前字段
+      const fields = dynamicFields.value.staticAttrs.get(element.node) || []
+      const currentField = fields.find(field => field.value === element.field)
+      
+      if (currentField) {
+        // 确定属性ID字段名，优先使用attributeId，其次使用id
+        const attributeId = currentField.attributeId || currentField.id
+        
+        if (attributeId) {
+          try {
+            // 调用API获取属性值，需要传递bomStructureId和attributeId
+            const response = await listSuperBomStructureAttributeValueByBomStructureIdAndAttributeId(
+              element.node,
+              attributeId
+            )
+            
+            // 更新字段的属性值
+            currentField.attributeValueList = response.data || []
+            
+            console.log('属性值加载成功:', currentField.attributeValueList)
+          } catch (error) {
+            console.error('加载属性值失败:', error)
+            ElMessage.error('加载属性值失败')
+          }
+        }
+      }
+    }
+  }
+}
+
+// 操作符变化处理
+const handleOperatorChange = (element) => {
+  // 当操作符为【为空】或【不为空】时，清空值
+  if (element.operator === 'is_empty' || element.operator === 'is_not_empty') {
+    element.value = ''
+  }
+}
+
 // 根据判断类型和节点获取字段
 const getFieldsByJudgeTypeAndNode = (judgeType, node) => {
   switch (judgeType) {
     case 'variable':
-      return bomVariables
+      // 变量类型不需要node参数，直接返回当前BOM的变量列表
+      return bomVariables.value
     case 'nodeStaticAttr':
-      return nodeStaticAttrs[node] || []
+      if (!node) return []
+      return dynamicFields.value.staticAttrs.get(node) || []
     case 'nodeDynamicAttr':
-      return nodeDynamicAttrs[node] || []
+      if (!node) return []
+      return dynamicFields.value.dynamicAttrs.get(node) || []
     case 'nodeProduct':
-      return nodeProducts[node] || []
+      if (!node) return []
+      return dynamicFields.value.products.get(node) || []
     default:
       return []
   }
+}
+
+// 根据条件元素获取属性值选项
+const getAttributeOptions = (element) => {
+  if (element.type !== 'select' || !element.node) {
+    return []
+  }
+  
+  // 当判断类型为节点产品时，直接返回该节点的产品列表作为选项
+  if (element.judgeType === 'nodeProduct') {
+    // 直接返回产品列表，不需要字段选择
+    return dynamicFields.value.products.get(element.node) || []
+  }
+  
+  // 其他判断类型的处理逻辑保持不变
+  if (!element.field) {
+    return []
+  }
+  
+  let fields = []
+  if (element.judgeType === 'nodeStaticAttr') {
+    fields = dynamicFields.value.staticAttrs.get(element.node) || []
+  } else if (element.judgeType === 'nodeDynamicAttr') {
+    fields = dynamicFields.value.dynamicAttrs.get(element.node) || []
+  }
+  
+  // 查找当前字段
+  const currentField = fields.find(field => field.value === element.field)
+  
+  if (!currentField) {
+    return []
+  }
+  
+  // 解析属性值
+  let attributeValues = []
+  
+  // 检查静态属性的属性值字段名
+  if (element.judgeType === 'nodeStaticAttr') {
+    // 静态属性可能使用不同的字段名存储属性值
+    attributeValues = currentField.attributeValueList || currentField.attributeValues || currentField.values || []
+  } else {
+    // 动态属性使用attributeValues
+    attributeValues = currentField.attributeValues || []
+  }
+  
+  if (typeof attributeValues === 'string') {
+    try {
+      attributeValues = JSON.parse(attributeValues)
+    } catch (error) {
+      console.error('解析属性值失败:', error)
+      return []
+    }
+  }
+  
+  // 转换为选项格式
+  if (Array.isArray(attributeValues)) {
+    return attributeValues.map(value => {
+      if (typeof value === 'object' && value !== null) {
+        return {
+          label: value.valueName || value.label || value.attributeValue || value.value || '',
+          value: value.valueCode || value.code || value.attributeValue || value.value || ''
+        }
+      } else {
+        return {
+          label: String(value),
+          value: String(value)
+        }
+      }
+    })
+  }
+  
+  return []
 }
 
 // 获取条件类型名称
@@ -600,7 +1154,8 @@ const addCondition = (parentConditions = null, parentIndex = null) => {
   const targetConditions = parentConditions || conditions.value
   
   const newCondition = {
-    id: Date.now(),
+    conditionId: null,
+    ruleId: props.ruleId,
     configType: 'simple', // 默认简单条件
     type: activeConditionType.value,
     judgeType: 'variable', // 默认判断类型为变量
@@ -609,11 +1164,13 @@ const addCondition = (parentConditions = null, parentIndex = null) => {
     operator: '',
     value: '',
     logic: targetConditions.length > 0 ? 'AND' : '',
+    parentConditionId: null,
     children: [] // 复杂条件的子条件
   }
   
-  if (parentIndex !== null) {
-    targetConditions.splice(parentIndex + 1, 0, newCondition)
+  if (parentConditions) {
+    newCondition.parentConditionId = parentConditions.conditionId
+    parentConditions.children.push(newCondition)
   } else {
     targetConditions.push(newCondition)
   }
@@ -624,12 +1181,15 @@ const addCondition = (parentConditions = null, parentIndex = null) => {
 // 添加复杂条件
 const addComplexCondition = () => {
   const newCondition = {
-    id: Date.now(),
+    conditionId: null,
+    ruleId: props.ruleId,
     configType: 'complex',
     logic: conditions.value.length > 0 ? 'AND' : '',
+    parentConditionId: null,
     children: [
       {
-        id: Date.now() + 1,
+        conditionId: null,
+        ruleId: props.ruleId,
         configType: 'simple',
         type: 'number',
         judgeType: 'variable',
@@ -637,7 +1197,8 @@ const addComplexCondition = () => {
         field: '',
         operator: '',
         value: '',
-        logic: ''
+        logic: '',
+        parentConditionId: null
       }
     ]
   }
@@ -652,7 +1213,8 @@ const addChildCondition = (parentCondition) => {
   }
   
   const newChild = {
-    id: Date.now(),
+    conditionId: null,
+    ruleId: props.ruleId,
     configType: 'simple',
     type: 'number',
     judgeType: 'variable',
@@ -660,7 +1222,8 @@ const addChildCondition = (parentCondition) => {
     field: '',
     operator: '',
     value: '',
-    logic: parentCondition.children.length > 0 ? 'AND' : ''
+    logic: parentCondition.children.length > 0 ? 'AND' : '',
+    parentConditionId: parentCondition.conditionId
   }
   
   parentCondition.children.push(newChild)
@@ -681,10 +1244,142 @@ const removeCondition = (index, parentConditions = null) => {
   updateParent()
 }
 
+// 保存条件
+const handleSave = async () => {
+  try {
+    // 1. 检查规则ID是否存在
+    if (!props.ruleId) {
+      // 开发环境下添加调试信息
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('规则ID为空，无法保存条件。请检查父组件是否传递了正确的ruleId参数。')
+        console.debug('当前组件props:', props)
+      }
+      ElMessage.warning('规则ID不能为空，无法保存条件。请先选择或创建规则，再配置条件。')
+      return
+    }
+    
+    // 2. 递归处理条件树，确保所有子条件都设置了ruleId和parentConditionId
+    const processConditions = (conditionsList, parentId = null) => {
+      return conditionsList.map(condition => {
+        const processedCondition = {
+          ...condition,
+          ruleId: props.ruleId,
+          parentConditionId: parentId
+        }
+        
+        if (processedCondition.children && processedCondition.children.length > 0) {
+          processedCondition.children = processConditions(processedCondition.children, processedCondition.conditionId)
+        }
+        
+        return processedCondition
+      })
+    }
+    
+    const processedConditions = processConditions(conditions.value)
+    
+    // 3. 批量保存或更新条件
+    for (const condition of processedConditions) {
+      if (condition.conditionId) {
+        // 更新现有条件
+        await updateRuleCondition(condition)
+      } else {
+        // 保存新条件
+        const response = await saveRuleCondition(condition)
+        condition.conditionId = response.data.conditionId
+        
+        // 递归更新子条件的parentConditionId
+        if (condition.children && condition.children.length > 0) {
+          const updateChildParentIds = (children, parentId) => {
+            children.forEach(child => {
+              child.parentConditionId = parentId
+              if (child.children && child.children.length > 0) {
+                updateChildParentIds(child.children, parentId)
+              }
+            })
+          }
+          updateChildParentIds(condition.children, condition.conditionId)
+        }
+      }
+    }
+    
+    updateParent()
+    ElMessage.success('条件保存成功')
+  } catch (error) {
+    console.error('保存条件失败:', error)
+    // 开发环境下添加更详细的错误信息
+    if (process.env.NODE_ENV === 'development') {
+      console.error('错误详情:', error.response || error)
+    }
+    ElMessage.error('保存条件失败：' + (error.response?.data?.message || error.message || '未知错误'))
+  }
+}
+
 
 
 // 生成条件表达式
 const generateConditionExpression = () => {
+  // 查找节点名称
+  const findNodeName = (nodes, nodeId) => {
+    for (const node of nodes) {
+      if (node.bomStructureId === nodeId || node.bomStructureId === Number(nodeId)) {
+        return node.nodeName
+      }
+      if (node.children && node.children.length > 0) {
+        const childName = findNodeName(node.children, nodeId)
+        if (childName) return childName
+      }
+    }
+    return null
+  }
+  
+  // 获取字段显示名称
+  const getFieldLabel = (cond) => {
+    if (!cond.field) return 'field'
+    
+    switch (cond.judgeType) {
+      case 'variable':
+        // 从bomVariables中查找变量名称
+        const variable = bomVariables.value.find(v => v.value === cond.field)
+        return variable ? variable.label : cond.field
+      case 'nodeStaticAttr':
+        // 从静态属性中查找字段名称
+        const staticAttrs = dynamicFields.value.staticAttrs.get(cond.node) || []
+        const staticAttr = staticAttrs.find(attr => attr.value === cond.field)
+        return staticAttr ? staticAttr.label : cond.field
+      case 'nodeDynamicAttr':
+        // 从动态属性中查找字段名称
+        const dynamicAttrs = dynamicFields.value.dynamicAttrs.get(cond.node) || []
+        const dynamicAttr = dynamicAttrs.find(attr => attr.value === cond.field)
+        return dynamicAttr ? dynamicAttr.label : cond.field
+      case 'nodeProduct':
+        // 从产品中查找字段名称
+        const products = dynamicFields.value.products.get(cond.node) || []
+        const product = products.find(p => p.value === cond.field)
+        return product ? product.label : cond.field
+      default:
+        return cond.field
+    }
+  }
+  
+  // 获取值显示名称
+  const getValueLabel = (cond) => {
+    if (cond.value === undefined || cond.value === null || cond.value === '') {
+      return ''
+    }
+    
+    // 对于选择类型，尝试查找值标签
+    if (cond.type === 'select') {
+      const options = getAttributeOptions(cond)
+      const option = options.find(opt => opt.value === cond.value)
+      if (option) {
+        return typeof option.label === 'string' ? `"${option.label}"` : option.label
+      }
+    }
+    
+    // 对于其他类型，直接返回值
+    return typeof cond.value === 'string' ? `"${cond.value}"` : cond.value
+  }
+  
   const generateExpression = (condList) => {
     if (!condList || condList.length === 0) return ''
     
@@ -696,20 +1391,30 @@ const generateConditionExpression = () => {
         return `${logic}(${childExpr})`
       } else {
         const judgeType = judgeTypes.find(t => t.value === cond.judgeType)?.label || cond.judgeType
-        const field = cond.field || 'field'
+        const operatorLabel = getOperatorsByType(cond.type).find(op => op.value === cond.operator)?.label || cond.operator
         const operator = cond.operator || '='
-        const value = typeof cond.value === 'string' ? `"${cond.value}"` : cond.value
         
         // 根据判断类型构建不同的表达式格式
-        let fieldExpr = field
+        let nodeLabel = ''
+        let fieldLabel = getFieldLabel(cond)
+        let valueLabel = getValueLabel(cond)
+        
         if (cond.judgeType !== 'variable') {
-          const node = bomNodes.find(n => n.value === cond.node)?.label || cond.node
-          fieldExpr = `${judgeType}[${node}].${field}`
-        } else {
-          fieldExpr = `${judgeType}[${field}]`
+          // 查找节点名称
+          if (cond.node) {
+            nodeLabel = findNodeName(bomNodesOptions.value, cond.node) || cond.node
+          }
         }
         
-        return `${logic}${fieldExpr} ${operator} ${value}`
+        // 构建字段表达式
+        let fieldExpr = ''
+        if (cond.judgeType !== 'variable') {
+          fieldExpr = `${judgeType}[${nodeLabel}].${fieldLabel}`
+        } else {
+          fieldExpr = `${judgeType}[${fieldLabel}]`
+        }
+        
+        return `${logic}${fieldExpr} ${operatorLabel} ${valueLabel}`
       }
     }).join(' ')
   }
@@ -760,6 +1465,7 @@ const useDeepSeekSuggestion = async () => {
 
 // 更新父组件
 const updateParent = () => {
+  console.log('更新父组件条件:', conditions.value)
   emit('update:modelValue', conditions.value)
   emit('update:conditions', conditions.value)
 }
