@@ -97,6 +97,7 @@ import { listAttributeValue } from '@/api/cpq/product'
 import { listSuperBomStructureAttribute, listSuperBomStructureAttributeValueByBomStructureIdAndAttributeId } from '@/api/cpq/bom'
 import { listSuperBomDynamicAttribute, getSuperBomDynamicAttributeByBomStructureId } from '@/api/cpq/superBomDynamicAttribute'
 import { listSuperBomProductRelation, getSuperBomProductRelationByBomIdAndStructureId } from '@/api/cpq/superBomProductRelation'
+import { debounce } from '@/utils/index'
 
 const props = defineProps({
   modelValue: {
@@ -198,8 +199,8 @@ const selectedValue = computed({
   set: (value) => emit('update:modelValue', value)
 })
 
-// 加载静态属性列表
-const loadStaticAttributes = async () => {
+// 防抖包装的静态属性加载函数
+const debouncedLoadStaticAttributes = debounce(async () => {
   if (!props.nodeId || !props.bomId) return
   
   loading.value = true
@@ -229,10 +230,13 @@ const loadStaticAttributes = async () => {
   } finally {
     loading.value = false
   }
-}
+}, 300)
 
-// 加载动态属性列表
-const loadDynamicAttributes = async () => {
+// 加载静态属性列表（使用防抖版本）
+const loadStaticAttributes = debouncedLoadStaticAttributes
+
+// 防抖包装的动态属性加载函数
+const debouncedLoadDynamicAttributes = debounce(async () => {
   if (!props.nodeId) return
   
   loading.value = true
@@ -258,10 +262,13 @@ const loadDynamicAttributes = async () => {
   } finally {
     loading.value = false
   }
-}
+}, 300)
 
-// 加载属性值列表
-const loadAttributeValues = async () => {
+// 加载动态属性列表（使用防抖版本）
+const loadDynamicAttributes = debouncedLoadDynamicAttributes
+
+// 防抖包装的属性值加载函数
+const debouncedLoadAttributeValues = debounce(async () => {
   if (!props.attributeId) return
   console.log('props.attributeType:', props.attributeType )
   console.log('props.dynamicValues:', props.dynamicValues )
@@ -384,10 +391,13 @@ const loadAttributeValues = async () => {
   } finally {
     loading.value = false
   }
-}
+}, 300)
 
-// 加载产品列表
-const loadProducts = async () => {
+// 加载属性值列表（使用防抖版本）
+const loadAttributeValues = debouncedLoadAttributeValues
+
+// 防抖包装的产品列表加载函数
+const debouncedLoadProducts = debounce(async () => {
   // 初始化产品列表，确保始终有值
   productList.value = []
   
@@ -449,7 +459,10 @@ const loadProducts = async () => {
   } finally {
     loading.value = false
   }
-}
+}, 300) // 300ms防抖等待时间
+
+// 加载产品列表（使用防抖版本）
+const loadProducts = debouncedLoadProducts
 
 // 初始化选中的属性对象
 const initSelectedAttr = () => {

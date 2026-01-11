@@ -238,7 +238,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
+import { ref, reactive, onMounted, onActivated, getCurrentInstance } from 'vue'
 import { useRoute } from 'vue-router'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { listAttribute, getAttribute, addAttribute, updateAttribute, deleteAttribute, exportAttribute } from '@/api/cpq/product'
@@ -535,6 +535,17 @@ const handleFileRemove = (file, fileList) => {
 }
 
 onMounted(() => {
+  // 获取用户store实例
+  const userStore = useUserStore()
+  // 如果有目录ID参数，设置到查询参数中
+  if (catalogId.value) {
+    queryParams.catalogId = catalogId.value
+  }
+  getList()
+})
+
+// 组件激活时重新加载数据
+onActivated(() => {
   // 获取用户store实例
   const userStore = useUserStore()
   // 如果有目录ID参数，设置到查询参数中

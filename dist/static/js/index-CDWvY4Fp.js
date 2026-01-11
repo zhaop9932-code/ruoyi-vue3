@@ -1,0 +1,1 @@
+import{B as c,u,S as i,Y as p,h as m,c as _,o as l}from"./index-DgigFOm-.js";const g={__name:"index",setup(f){const t=c(),s=u(),e=i(),o=p(),{params:r,query:a}=t,{path:n}=r;return m(async()=>{e.roles.length===0&&(await e.getInfo(),await o.generateRoutes()),s.replace({path:"/"+n,query:a})}),(h,S)=>(l(),_("div"))}};export{g as default};

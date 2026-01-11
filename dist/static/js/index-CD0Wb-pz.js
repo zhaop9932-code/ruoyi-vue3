@@ -1,1 +1,0 @@
-import{u as c,a as u,b as i,c as p,o as m,d as _,e as l}from"./index-CwdKQqOf.js";const g={__name:"index",setup(d){const t=c(),s=u(),e=i(),o=p(),{params:r,query:a}=t,{path:n}=r;return m(async()=>{e.roles.length===0&&(await e.getInfo(),await o.generateRoutes()),s.replace({path:"/"+n,query:a})}),(f,h)=>(l(),_("div"))}};export{g as default};

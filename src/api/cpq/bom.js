@@ -163,6 +163,14 @@ export function updateSuperBomStructure(data) {
   })
 }
 
+export function saveSuperBomStructure(data) {
+  if (data.bomStructureId) {
+    return updateSuperBomStructure(data)
+  } else {
+    return addSuperBomStructure(data)
+  }
+}
+
 export function deleteSuperBomStructure(bomStructureIds) {
   return request({
     url: `/cpq/superBomStructure/${bomStructureIds}`,
@@ -179,10 +187,14 @@ export function listSuperBomStructureAttribute(query) {
   })
 }
 
-export function listSuperBomStructureAttributeByBomStructureId(bomStructureId) {
+export function listSuperBomStructureAttributeByBomStructureId(bomId, bomStructureId) {
   return request({
-    url: `/cpq/superBomStructureAttribute/listByBomStructureId/${bomStructureId}`,
-    method: 'get'
+    url: `/cpq/superBomStructureAttribute/list`,
+    method: 'get',
+    params: {
+      bomId,
+      bomStructureId
+    }
   })
 }
 
@@ -198,7 +210,15 @@ export function updateSuperBomStructureAttribute(bomStructureId, attributes) {
   return request({
     url: `/cpq/superBomStructureAttribute/updateAttributes/${bomStructureId}`,
     method: 'put',
-    data: { attributes }
+    data: attributes
+  })
+}
+
+// 删除BOM结构属性
+export function deleteSuperBomStructureAttribute(ids) {
+  return request({
+    url: `/cpq/superBomStructureAttribute/${ids}`,
+    method: 'delete'
   })
 }
 

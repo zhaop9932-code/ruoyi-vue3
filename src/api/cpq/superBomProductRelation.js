@@ -44,7 +44,10 @@ export function getSuperBomProductRelationByBomIdAndStructureId(data) {
   return request({
     url: '/cpq/superBomProductRelation/getByBomIdAndStructureId',
     method: 'post',
-    data: data
+    data: data,
+    headers: {
+      repeatSubmit: false
+    }
   })
 }
 

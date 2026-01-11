@@ -238,7 +238,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
+import { ref, reactive, onMounted, onActivated, getCurrentInstance, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Close, UploadFilled } from '@element-plus/icons-vue'
 import { listBrand, getBrand, addBrand, updateBrand, delBrand, checkBrandCodeUnique, exportBrand } from '@/api/cpq/brand'
@@ -522,6 +522,11 @@ const $refs = ref({
 })
 
 onMounted(() => {
+  getList()
+})
+
+// 组件激活时重新加载数据
+onActivated(() => {
   getList()
 })
 </script>

@@ -1,1 +1,0 @@
-import{T as t}from"./index-CwdKQqOf.js";const r=e=>t({url:"/cpq/superBomRuleRelation/getByBomId",method:"post",data:typeof e=="object"?e:{bomId:e}}),u=e=>t({url:"/cpq/superBomRuleRelation/edit",method:"post",data:e}),a=e=>t({url:"/cpq/superBomRuleRelation/remove",method:"post",data:e});export{a as d,r as g,u};

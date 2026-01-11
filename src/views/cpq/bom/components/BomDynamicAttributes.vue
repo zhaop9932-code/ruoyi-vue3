@@ -52,16 +52,17 @@
         <el-form-item label="属性名称" prop="attrName">
           <el-input v-model="attributeForm.attrName" placeholder="请输入属性名称" />
         </el-form-item>
-        <el-form-item label="属性类型" prop="attrType">
-          <el-select v-model="attributeForm.attrType" placeholder="请选择属性类型" @change="handleAttrTypeChange">
-            <el-option label="文本" value="string" />
-            <el-option label="数字" value="number" />
-            <el-option label="布尔值" value="boolean" />
-            <el-option label="日期" value="date" />
-            <el-option label="下拉选择" value="select" />
+        <el-form-item label="组件类型" prop="attrType">
+          <el-select v-model="attributeForm.attrType" placeholder="请选择组件类型" @change="handleAttrTypeChange">
+            <el-option label="单行文本输入框" value="input" />
+            <el-option label="多行文本输入框" value="textarea" />
+            <el-option label="下拉单选" value="select" />
+            <el-option label="下拉多选" value="multiple-select" />
+            <el-option label="滑块" value="slider" />
+            <el-option label="开关" value="switch" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="attributeForm.attrType === 'select'" label="选项列表" prop="options">
+        <el-form-item v-if="['select', 'multiple-select'].includes(attributeForm.attrType)" label="选项列表" prop="options">
           <el-input
             v-model="optionsText"
             type="textarea"
@@ -73,17 +74,12 @@ blue=蓝色
 green=绿色</div>
         </el-form-item>
         <el-form-item label="默认值" prop="attrValue">
-          <template v-if="attributeForm.attrType === 'boolean'">
+          <!-- 开关 -->
+          <template v-if="attributeForm.attrType === 'switch'">
             <el-switch v-model="attributeForm.attrValue" />
           </template>
-          <template v-else-if="attributeForm.attrType === 'date'">
-            <el-date-picker
-              v-model="attributeForm.attrValue"
-              type="date"
-              placeholder="选择日期"
-              style="width: 100%"
-            />
-          </template>
+          
+          <!-- 下拉单选 -->
           <template v-else-if="attributeForm.attrType === 'select' && attributeForm.options && attributeForm.options.length > 0">
             <el-select v-model="attributeForm.attrValue" placeholder="请选择属性值">
               <el-option
@@ -94,14 +90,35 @@ green=绿色</div>
               />
             </el-select>
           </template>
-          <template v-else-if="attributeForm.attrType === 'number'">
-            <el-input-number
-              v-model="attributeForm.attrValue"
-              :min="0"
-              :step="1"
-              placeholder="请输入数值"
+          
+          <!-- 下拉多选 -->
+          <template v-else-if="attributeForm.attrType === 'multiple-select' && attributeForm.options && attributeForm.options.length > 0">
+            <el-select v-model="attributeForm.attrValue" placeholder="请选择属性值" multiple collapse-tags>
+              <el-option
+                v-for="option in attributeForm.options"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </template>
+          
+          <!-- 滑块 -->
+          <template v-else-if="attributeForm.attrType === 'slider'">
+            <el-slider v-model="attributeForm.attrValue" :min="0" :max="100" :step="1" show-input />
+          </template>
+          
+          <!-- 多行文本输入框 -->
+          <template v-else-if="attributeForm.attrType === 'textarea'">
+            <el-input 
+              v-model="attributeForm.attrValue" 
+              type="textarea" 
+              placeholder="请输入属性值" 
+              :rows="3"
             />
           </template>
+          
+          <!-- 默认：单行文本输入框 -->
           <template v-else>
             <el-input v-model="attributeForm.attrValue" placeholder="请输入属性值" />
           </template>
@@ -166,7 +183,7 @@ const attributeForm = reactive({
   attrType: 'string',
   attrValue: '',
   required: false,
-  sortOrder: 0,
+  sortOrder: 100,
   description: '',
   options: []
 })
@@ -185,26 +202,38 @@ const rules = reactive({
   ]
 })
 
-// 获取属性类型名称
+// 获取组件类型名称
 const getAttributeTypeName = (type) => {
   const typeMap = {
-    string: '文本',
-    number: '数字',
-    boolean: '布尔值',
-    date: '日期',
-    select: '下拉选择'
+    input: '单行文本输入框',
+    textarea: '多行文本输入框',
+    select: '下拉单选',
+    'multiple-select': '下拉多选',
+    slider: '滑块',
+    switch: '开关',
+    // 兼容旧类型
+    string: '单行文本输入框',
+    number: '单行文本输入框',
+    boolean: '开关',
+    date: '单行文本输入框'
   }
   return typeMap[type] || type
 }
 
-// 获取属性类型标签样式
+// 获取组件类型标签样式
 const getAttributeTypeTag = (type) => {
   const tagMap = {
+    input: 'primary',
+    textarea: 'success',
+    select: 'warning',
+    'multiple-select': 'info',
+    slider: 'danger',
+    switch: 'primary',
+    // 兼容旧类型
     string: 'primary',
     number: 'success',
     boolean: 'warning',
-    date: 'info',
-    select: 'danger'
+    date: 'info'
   }
   return tagMap[type] || 'default'
 }
@@ -281,16 +310,29 @@ const loadAttributeList = () => {
   }, 500)
 }
 
-// 处理属性类型变化
+// 处理组件类型变化
 const handleAttrTypeChange = () => {
-  // 清空属性值和选项
-  attributeForm.attrValue = ''
+  // 清空选项
   attributeForm.options = []
   optionsText.value = ''
   
-  // 如果是布尔值，设置默认值为false
-  if (attributeForm.attrType === 'boolean') {
-    attributeForm.attrValue = false
+  // 根据组件类型设置默认值
+  switch (attributeForm.attrType) {
+    case 'switch':
+      attributeForm.attrValue = false
+      break
+    case 'multiple-select':
+      attributeForm.attrValue = []
+      break
+    case 'slider':
+      attributeForm.attrValue = 0
+      break
+    case 'textarea':
+    case 'input':
+    case 'select':
+    default:
+      attributeForm.attrValue = ''
+      break
   }
 }
 
@@ -337,6 +379,11 @@ const handleAddAttribute = () => {
 const handleEditAttribute = (row) => {
   // 复制行数据到表单
   Object.assign(attributeForm, { ...row })
+  
+  // 确保开关类型的属性值为布尔类型
+  if (row.attrType === 'switch') {
+    attributeForm.attrValue = Boolean(row.attrValue)
+  }
   
   // 处理选项文本
   if (row.attrType === 'select' && row.options && row.options.length > 0) {
@@ -403,8 +450,18 @@ const handleBatchDelete = async () => {
 const handleSubmit = async () => {
   try {
     // 更新选项列表
-    if (attributeForm.attrType === 'select') {
+    if (['select', 'multiple-select'].includes(attributeForm.attrType)) {
       updateOptionsFromText()
+    }
+    
+    // 确保下拉多选类型的默认值是数组
+    if (attributeForm.attrType === 'multiple-select' && !Array.isArray(attributeForm.attrValue)) {
+      attributeForm.attrValue = attributeForm.attrValue ? [attributeForm.attrValue] : []
+    }
+    
+    // 确保开关类型的属性值为布尔类型
+    if (attributeForm.attrType === 'switch') {
+      attributeForm.attrValue = Boolean(attributeForm.attrValue)
     }
     
     await attributeFormRef.value.validate()
@@ -419,7 +476,7 @@ const handleSubmit = async () => {
       if (index !== -1) {
         attributeList.value[index] = { ...attributeForm }
       }
-      ElMessage.success('属性更新成功')
+      ElMessage.success('组件更新成功')
     } else {
       // 新增模式
       // 实际项目中替换为真实API调用
@@ -431,14 +488,14 @@ const handleSubmit = async () => {
         attrId: Date.now()
       }
       attributeList.value.push(newAttribute)
-      ElMessage.success('属性新增成功')
+      ElMessage.success('组件新增成功')
     }
     
     dialogVisible.value = false
   } catch (error) {
     if (error !== false) {
       ElMessage.error('操作失败，请检查表单数据')
-      console.error('提交属性表单失败:', error)
+      console.error('提交组件表单失败:', error)
     }
   }
 }
@@ -448,13 +505,18 @@ const resetForm = () => {
   attributeForm.attrId = null
   attributeForm.attrCode = ''
   attributeForm.attrName = ''
-  attributeForm.attrType = 'string'
+  attributeForm.attrType = 'input' // 默认使用单行文本输入框
   attributeForm.attrValue = ''
   attributeForm.required = false
-  attributeForm.sortOrder = 0
+  attributeForm.sortOrder = 100
   attributeForm.description = ''
   attributeForm.options = []
   optionsText.value = ''
+  
+  // 根据默认类型设置合适的默认值
+  if (attributeForm.attrType === 'switch') {
+    attributeForm.attrValue = false
+  }
   
   attributeFormRef.value?.resetFields()
 }

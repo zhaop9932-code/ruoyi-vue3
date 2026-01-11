@@ -216,7 +216,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { listSuperBom, addSuperBom, updateSuperBom, deleteSuperBom, checkBomCodeUnique } from '@/api/cpq/bom'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -390,6 +390,11 @@ const cancel = () => {
 }
 
 onMounted(() => {
+  getList()
+})
+
+// 组件激活时重新加载数据
+onActivated(() => {
   getList()
 })
 </script>

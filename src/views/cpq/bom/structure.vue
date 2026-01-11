@@ -26,8 +26,8 @@
                   <span :class="{'node-selected': selectedNode && selectedNode.bomStructureId === data.bomStructureId}">
                     {{ node.label }}
                   </span>
-                  <el-tag :type="data.nodeType === '0' ? 'primary' : data.nodeType === '1' ? 'success' : 'warning'" size="small" class="node-type-tag">
-                    {{ data.nodeType === '0' ? '物料' : data.nodeType === '1' ? '组件' : '服务' }}
+                  <el-tag :type="data.nodeType === '0' ? 'primary' : data.nodeType === '1' ? 'success' : data.nodeType === '2' ? 'warning' : 'info'" size="small" class="node-type-tag">
+                    {{ data.nodeType === '0' ? '物料' : data.nodeType === '1' ? '组件' : data.nodeType === '2' ? '服务' : '参数要求' }}
                   </el-tag>
                 </div>
               </template>
@@ -92,6 +92,7 @@
                         <el-option label="物料" value="0" />
                         <el-option label="组件" value="1" />
                         <el-option label="服务" value="2" />
+                        <el-option label="参数要求" value="3" />
                       </el-select>
                     </el-form-item>
                     <el-form-item label="默认数量" prop="defaultQuantity">
@@ -749,7 +750,8 @@ const loadNodeDetails = async (bomStructureId) => {
 // 加载属性列表
 const loadAttributes = async (bomStructureId) => {
   try {
-    const res = await listSuperBomStructureAttributeByBomStructureId(bomStructureId)
+    // 使用当前组件的bomId和传入的bomStructureId
+    const res = await listSuperBomStructureAttributeByBomStructureId(bomId.value, bomStructureId)
     attributeList.value = res.data || []
   } catch (error) {
     ElMessage.error('获取属性列表失败')

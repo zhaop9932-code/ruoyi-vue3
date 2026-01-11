@@ -265,7 +265,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
+import { ref, reactive, onMounted, onActivated, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
@@ -679,6 +679,13 @@ const handleFileRemove = (file, fileList) => {
 }
 
 onMounted(() => {
+  getList()
+  getTreeselect()
+})
+
+// 组件激活时重新加载数据
+onActivated(() => {
+  // 确保组件每次激活时都重新加载数据
   getList()
   getTreeselect()
 })

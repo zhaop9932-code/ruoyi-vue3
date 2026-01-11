@@ -1,1 +1,0 @@
-import{T as r}from"./index-CwdKQqOf.js";function e(t){return r({url:`/cpq/superBomDynamicAttribute/byBomStructureId/${t}`,method:"get"})}function m(t){return r({url:"/cpq/superBomDynamicAttribute",method:"put",data:t})}export{e as g,m as u};

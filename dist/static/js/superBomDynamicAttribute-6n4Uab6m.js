@@ -1,0 +1,1 @@
+import{a9 as r}from"./index-DgigFOm-.js";function e(t){return r({url:`/cpq/superBomDynamicAttribute/byBomStructureId/${t}`,method:"get"})}function m(t){return r({url:"/cpq/superBomDynamicAttribute",method:"put",data:t})}export{e as g,m as u};

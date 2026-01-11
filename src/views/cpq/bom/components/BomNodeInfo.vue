@@ -57,12 +57,17 @@
         <div v-if="!selectedNode" class="empty-detail">
           <el-empty description="请选择或新增一个节点" />
         </div>
-        <el-tabs v-else v-model="activeTab" type="border-card">
+        <div v-else>
+          <div class="detail-header">
+            <el-button type="primary" @click="handleSaveNodeInfo">保存节点信息</el-button>
+          </div>
+          <el-tabs v-model="activeTab" type="border-card">
           <el-tab-pane label="节点信息" name="nodeInfo">
             <bom-node-info-detail 
               :bom-id="bomId" 
               :bom-structure-id="selectedNode.bomStructureId"
               :selected-node="selectedNode"
+              @node-updated="handleNodeUpdated"
             />
           </el-tab-pane>
           <el-tab-pane label="属性信息" name="attributes">
@@ -91,6 +96,7 @@
             />
           </el-tab-pane>
         </el-tabs>
+        </div>
       </div>
     </div>
     
@@ -129,6 +135,7 @@
             <el-option label="物料" value="0" />
             <el-option label="组件" value="1" />
             <el-option label="服务" value="2" />
+            <el-option label="参数要求" value="3" />
           </el-select>
         </el-form-item>
         <el-form-item label="父节点" prop="parentNodeId">
@@ -188,6 +195,7 @@ import {
   listSuperBomStructure,
   addSuperBomStructure, 
   updateSuperBomStructure, 
+  saveSuperBomStructure,
   deleteSuperBomStructure
 } from '@/api/cpq/bom'
 
@@ -244,7 +252,7 @@ const dialogNodeForm = reactive({
   bomId: props.bomId,
   nodeCode: '',
   nodeName: '',
-  nodeType: '0', // 0：物料，1：组件，2：服务
+  nodeType: '0', // 0：物料，1：组件，2：服务，3：参数要求
   parentNodeId: null,
   quantity: 1,
   unit: '',
@@ -290,7 +298,8 @@ const getNodeTypeName = (type) => {
   const typeMap = {
     '0': '物料',
     '1': '组件',
-    '2': '服务'
+    '2': '服务',
+    '3': '参数要求'
   }
   return typeMap[type] || type
 }
@@ -584,15 +593,16 @@ const handleDialogSubmit = async () => {
   try {
     await dialogFormRef.value.validate()
     
+    // 确保bomId始终正确
+    dialogNodeForm.bomId = props.bomId
+    
+    // 使用saveSuperBomStructure函数，根据bomStructureId自动选择正确的HTTP方法
+    await saveSuperBomStructure(dialogNodeForm)
+    await loadNodeTree() // 重新加载节点树
+    
     if (dialogNodeForm.bomStructureId) {
-      // 编辑模式
-      await updateSuperBomStructure(dialogNodeForm)
-      await loadNodeTree() // 重新加载节点树
       ElMessage.success('节点更新成功')
     } else {
-      // 新增模式
-      await addSuperBomStructure(dialogNodeForm)
-      await loadNodeTree() // 重新加载节点树
       ElMessage.success('节点新增成功')
     }
     
@@ -605,12 +615,43 @@ const handleDialogSubmit = async () => {
   }
 }
 
+// 处理节点数据更新
+const handleNodeUpdated = (updatedNode) => {
+  selectedNode.value = updatedNode
+}
+
+// 保存节点信息
+const handleSaveNodeInfo = async () => {
+  try {
+    if (!selectedNode.value) {
+      ElMessage.warning('请先选择一个节点')
+      return
+    }
+    
+    // 移除不需要发送给API的字段，如children字段
+    const nodeData = { 
+      ...selectedNode.value,
+      bomId: props.bomId // 确保bomId被正确传递
+    }
+    delete nodeData.children
+    delete nodeData._treeNodeId // 可能存在的树节点内部ID
+    delete nodeData.loading // 可能存在的加载状态
+    
+    await saveSuperBomStructure(nodeData)
+    await loadNodeTree() // 重新加载节点树
+    ElMessage.success('节点信息保存成功')
+  } catch (error) {
+    ElMessage.error('保存节点信息失败')
+    console.error('保存节点信息失败:', error)
+  }
+}
+
 // 重置对话框表单
 const resetDialogForm = () => {
   dialogNodeForm.bomStructureId = null    
   dialogNodeForm.nodeCode = ''
   dialogNodeForm.nodeName = ''
-  dialogNodeForm.nodeType = '0' // 0：物料，1：组件，2：服务
+  dialogNodeForm.nodeType = '0' // 0：物料，1：组件，2：服务，3：参数要求
   dialogNodeForm.parentNodeId = null
   dialogNodeForm.quantity = 1
   dialogNodeForm.unit = ''
@@ -766,6 +807,16 @@ onUnmounted(() => {
 .el-tree-node.is-current .el-tree-node__content {
   background-color: #f0f9ff;
   border-radius: 4px;
+}
+
+/* 详情页头部样式 */
+.detail-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e4e7ed;
 }
 
 /* 右键菜单样式 */

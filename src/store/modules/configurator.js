@@ -1,673 +1,407 @@
-/**
- * 用户选型配置器 - Pinia Store
- * 管理产品配置会话、规则引擎、状态同步
- */
-
-import { defineStore } from 'pinia'
-import { ElMessage } from 'element-plus'
-import { 
-  listSuperBomStructureTree,
-  listSuperBomStructureAttributeByBomStructureId
-} from '@/api/cpq/bom'
-import { getSuperBomRuleRelationByBomId } from '@/api/cpq/superBomRuleRelation'
-import { getSuperBomProductRelationByBomIdAndStructureId } from '@/api/cpq/superBomProductRelation'
-import { getConfigurationRule } from '@/api/cpq/rule'
-import { getSuperBomVariableByBomId } from '@/api/cpq/superBomVariable'
-import { 
-  addConfigSession, 
-  updateConfigSession, 
-  getConfigSession,
-  completeConfigSession 
-} from '@/api/cpq/configSession'
-import RuleEngine from '@/utils/ruleEngine'
-
-export const useConfiguratorStore = defineStore('configurator', {
-  state: () => ({
-    // 当前BOM ID
-    currentBomId: null,
-    
-    // BOM树形数据
-    bomTreeData: [],
-    
-    // 扁平化节点映射 bomStructureId -> node
-    nodesMap: new Map(),
-    
-    // 配置会话
-    configSession: {
-      sessionId: null,
-      bomId: null,
-      sessionName: '',
-      createdAt: null,
-      updatedAt: null,
-      status: 'draft', // draft | completed | saved
-      configuration: {}
-    },
-    
-    // 规则列表
-    rules: [],
-    
-    // BOM变量
-    variables: {},
-    
-    // 校验错误
-    validationErrors: {},
-    
-    // 价格计算结果
-    pricing: {
-      totalPrice: 0,
-      breakdown: []
-    },
-    
-    // 加载状态
-    loading: {
-      bom: false,
-      rules: false,
-      validation: false
-    }
-  }),
-
-  getters: {
-    /**
-     * 获取当前配置的节点
-     */
-    configuredNodes: (state) => {
-      return Array.from(state.nodesMap.values()).filter(
-        node => node.status === 'configured'
-      )
-    },
-
-    /**
-     * 获取未配置的必选节点
-     */
-    unconfiguredRequiredNodes: (state) => {
-      return Array.from(state.nodesMap.values()).filter(
-        node => node.isRequired && node.status !== 'configured'
-      )
-    },
-
-    /**
-     * 配置是否完整
-     */
-    isConfigurationComplete: (state) => {
-      return Array.from(state.nodesMap.values()).every(
-        node => !node.isRequired || node.status === 'configured'
-      )
-    },
-
-    /**
-     * 配置摘要
-     */
-    configurationSummary: (state) => {
-      const summary = {
-        totalNodes: state.nodesMap.size,
+const useConfiguratorStore = defineStore(
+  'configurator',
+  {
+    state: () => ({
+      // 当前BOM信息
+      currentBom: {
+        bomId: '',
+        bomName: '',
+        bomCode: ''
+      },
+      // 加载状态
+      loading: {
+        bom: false,
+        rules: false,
+        attributes: false
+      },
+      // 配置会话
+      configSession: {
+        status: 'draft', // draft, saved, completed
+        configuration: {}
+      },
+      // 配置摘要
+      configurationSummary: {
+        totalNodes: 0,
         configuredNodes: 0,
         requiredNodes: 0,
-        optionalNodes: 0,
         errors: 0
+      },
+      // 已配置节点
+      configuredNodes: [],
+      // 价格信息
+      pricing: {
+        breakdown: [],
+        totalPrice: 0,
+        productPrice: 0,
+        servicePrice: 0,
+        subtotal: 0
+      },
+      // 验证错误
+      validationErrors: {}
+    }),
+    actions: {
+    // 设置当前BOM
+    setCurrentBom(bom) {
+      this.currentBom = bom || {
+        bomId: '',
+        bomName: '',
+        bomCode: ''
       }
-
-      state.nodesMap.forEach(node => {
-        if (node.status === 'configured') {
-          summary.configuredNodes++
-        }
-        if (node.isRequired) {
-          summary.requiredNodes++
-        } else {
-          summary.optionalNodes++
-        }
-        if (node.status === 'error') {
-          summary.errors++
-        }
-      })
-
-      return summary
-    }
-  },
-
-  actions: {
-    /**
-     * 加载BOM结构
-     * @param {Number} bomId - BOM ID
-     */
+    },
+    // 加载BOM结构
     async loadBomStructure(bomId) {
       this.loading.bom = true
-      this.currentBomId = bomId
-
       try {
-        // 加载BOM树
-        const treeResponse = await listSuperBomStructureTree(bomId)
-        this.bomTreeData = treeResponse.data || []
-
-        // 构建扁平化节点映射
-        this.buildNodesMap(this.bomTreeData)
-
-        // 加载BOM变量
-        await this.loadBomVariables(bomId)
-
-        // 加载规则
-        await this.loadBomRules(bomId)
-
-        // 初始化配置会话
-        this.initConfigSession(bomId)
-
-        return true
+        // 这里应该调用实际的API来加载BOM结构
+        // 暂时模拟异步请求
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        console.log('加载BOM结构:', bomId)
+        // 模拟初始化数据
+        this.configurationSummary = {
+          totalNodes: 10,
+          configuredNodes: 0,
+          requiredNodes: 5,
+          errors: 0
+        }
+        this.configuredNodes = []
+        this.pricing = {
+          breakdown: [],
+          totalPrice: 0,
+          productPrice: 0,
+          servicePrice: 0,
+          subtotal: 0
+        }
       } catch (error) {
         console.error('加载BOM结构失败:', error)
-        ElMessage.error('加载BOM结构失败')
-        return false
+        throw error
       } finally {
         this.loading.bom = false
       }
     },
-
-    /**
-     * 构建节点映射
-     * @param {Array} nodes - 节点数组
-     */
-    buildNodesMap(nodes) {
-      nodes.forEach(node => {
-        // 初始化节点状态
-        node.status = 'unconfigured'
-        node.isVisible = true
-        node.isDisabled = false
-        node.quantity = node.defaultQuantity || 1
-
-        // 解析约束配置
-        if (node.constraintConfig && typeof node.constraintConfig === 'string') {
-          try {
-            node.constraintConfig = JSON.parse(node.constraintConfig)
-          } catch (error) {
-            console.error('解析约束配置失败:', error)
-          }
-        }
-
-        // 确定是否必选
-        node.isRequired = node.constraintType === '' || 
-                         (node.constraintConfig && node.constraintConfig.required === true)
-
-        this.nodesMap.set(node.bomStructureId, node)
-
-        // 递归处理子节点
-        if (node.children && node.children.length > 0) {
-          this.buildNodesMap(node.children)
-        }
-      })
-    },
-
-    /**
-     * 加载BOM变量
-     * @param {Number} bomId - BOM ID
-     */
-    async loadBomVariables(bomId) {
-      try {
-        const response = await getSuperBomVariableByBomId(bomId)
-        const variables = response.data || []
-
-        this.variables = {}
-        variables.forEach(variable => {
-          this.variables[variable.variableCode] = variable.defaultValue
-        })
-      } catch (error) {
-        console.error('加载BOM变量失败:', error)
-      }
-    },
-
-    /**
-     * 加载BOM规则
-     * @param {Number} bomId - BOM ID
-     */
-    async loadBomRules(bomId) {
-      this.loading.rules = true
-
-      try {
-        // 获取BOM关联的规则
-        const relationResponse = await getSuperBomRuleRelationByBomId(bomId)
-        const relations = relationResponse.data || []
-
-        // 加载规则详情
-        const rulePromises = relations
-          .filter(rel => rel.status === 0) // 只加载启用的规则
-          .map(rel => getConfigurationRule(rel.ruleId))
-
-        const ruleResponses = await Promise.all(rulePromises)
-        this.rules = ruleResponses.map(res => res.data)
-
-        // 加载规则到规则引擎
-        RuleEngine.loadRules(this.rules)
-      } catch (error) {
-        console.error('加载BOM规则失败:', error)
-      } finally {
-        this.loading.rules = false
-      }
-    },
-
-    /**
-     * 初始化配置会话
-     * @param {Number} bomId - BOM ID
-     */
-    initConfigSession(bomId) {
-      this.configSession = {
-        sessionId: `SESSION_${Date.now()}`,
-        bomId,
-        sessionName: `配置会话_${new Date().toLocaleString()}`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        status: 'draft',
-        configuration: {},
-        savedToBackend: false
-      }
-    },
-
-    /**
-     * 更新节点配置
-     * @param {Number} nodeId - 节点ID
-     * @param {Object} config - 配置数据
-     */
-    async saveNodeConfiguration(nodeId, config) {
-      const node = this.nodesMap.get(nodeId)
-      if (!node) {
-        throw new Error(`节点不存在: ${nodeId}`)
-      }
-
-      // 更新节点状态
-      node.status = 'configured'
-      node.configuration = config
-
-      // 更新配置会话
-      this.configSession.configuration[nodeId] = config
-      this.configSession.updatedAt = new Date()
-
-      // 触发规则引擎校验
-      await this.runRuleEngine()
-
-      // 重新计算价格
-      await this.calculateTotalPrice()
-    },
-
-    /**
-     * 更新节点数量
-     * @param {Number} nodeId - 节点ID
-     * @param {Number} quantity - 数量
-     */
-    async updateNodeQuantity(nodeId, quantity) {
-      const node = this.nodesMap.get(nodeId)
-      if (!node) return
-
-      node.quantity = quantity
-
-      if (this.configSession.configuration[nodeId]) {
-        this.configSession.configuration[nodeId].quantity = quantity
-      }
-
-      // 触发规则引擎
-      await this.runRuleEngine()
-      await this.calculateTotalPrice()
-    },
-
-    /**
-     * 选择节点产品
-     * @param {Number} nodeId - 节点ID
-     * @param {Number} productId - 产品ID
-     */
-    async selectNodeProduct(nodeId, productId) {
-      const node = this.nodesMap.get(nodeId)
-      if (!node) return
-
-      node.selectedProductId = productId
-
-      if (!this.configSession.configuration[nodeId]) {
-        this.configSession.configuration[nodeId] = {}
-      }
-      this.configSession.configuration[nodeId].selectedProductId = productId
-
-      // 触发规则引擎
-      await this.runRuleEngine()
-      await this.calculateTotalPrice()
-    },
-
-    /**
-     * 运行规则引擎
-     */
-    async runRuleEngine() {
-      // 构建规则引擎上下文
-      const context = {
-        variables: this.variables,
-        nodes: {},
-        pricing: this.pricing
-      }
-
-      // 填充节点数据
-      this.nodesMap.forEach((node, nodeId) => {
-        context.nodes[nodeId] = {
-          nodeId,
-          nodeCode: node.nodeCode,
-          nodeName: node.nodeName,
-          nodeType: node.nodeType,
-          quantity: node.quantity,
-          selectedProductId: node.selectedProductId,
-          attributes: node.configuration || {},
-          status: node.status,
-          isVisible: node.isVisible,
-          isDisabled: node.isDisabled,
-          product: node.product || {}
-        }
-      })
-
-      // 设置上下文并评估规则
-      RuleEngine.setContext(context)
-      const result = await RuleEngine.evaluateAll()
-
-      // 应用规则结果
-      this.applyRuleResults(result)
-
-      // 更新校验错误
-      this.validationErrors = {}
-      result.errors.forEach(error => {
-        this.validationErrors[error.ruleId] = error.message
-      })
-
-      return result.passed
-    },
-
-    /**
-     * 应用规则结果
-     * @param {Object} result - 规则执行结果
-     */
-    applyRuleResults(result) {
-      // 获取更新后的上下文
-      const context = RuleEngine.getContext()
-
-      // 更新节点状态
-      Object.entries(context.nodes).forEach(([nodeId, nodeData]) => {
-        const node = this.nodesMap.get(Number(nodeId))
-        if (node) {
-          node.isVisible = nodeData.isVisible !== false
-          node.isDisabled = nodeData.isDisabled === true
-
-          // 更新节点属性
-          if (nodeData.attributes) {
-            Object.assign(node.configuration || {}, nodeData.attributes)
-          }
-        }
-      })
-
-      // 更新变量
-      if (context.variables) {
-        Object.assign(this.variables, context.variables)
-      }
-
-      // 处理消息动作
-      result.actions.forEach(action => {
-        if (action.actionType === 'showMessage' && action.result) {
-          const { messageType, message } = action.result
-          if (messageType === 'success') {
-            ElMessage.success(message)
-          } else if (messageType === 'warning') {
-            ElMessage.warning(message)
-          } else if (messageType === 'error') {
-            ElMessage.error(message)
-          } else {
-            ElMessage.info(message)
-          }
-        }
-      })
-    },
-
-    /**
-     * 验证节点配置
-     * @param {Number} nodeId - 节点ID
-     * @param {Object} config - 配置数据
-     * @returns {Boolean} 验证结果
-     */
-    async validateNodeConfiguration(nodeId, config) {
-      const node = this.nodesMap.get(nodeId)
-      if (!node) return false
-
-      // 暂存当前配置
-      const tempConfig = node.configuration
-      node.configuration = config
-      node.status = 'configured'
-
-      // 运行规则引擎
-      const valid = await this.runRuleEngine()
-
-      // 检查节点约束
-      const constraintResult = RuleEngine.checkNodeConstraints(nodeId, node)
-
-      if (!constraintResult.valid) {
-        // 恢复配置
-        node.configuration = tempConfig
-        node.status = 'error'
-
-        // 记录约束错误
-        this.validationErrors[nodeId] = constraintResult.errors
-          .map(err => err.message)
-          .join('; ')
-
-        return false
-      }
-
-      return valid
-    },
-
-    /**
-     * 验证属性
-     * @param {Number} nodeId - 节点ID
-     * @param {String} attributeCode - 属性代码
-     * @param {*} value - 属性值
-     */
-    async validateAttribute(nodeId, attributeCode, value) {
-      // 更新临时值并触发规则引擎
-      const context = RuleEngine.getContext()
-      if (!context.nodes[nodeId]) {
-        context.nodes[nodeId] = { attributes: {} }
-      }
-      context.nodes[nodeId].attributes[attributeCode] = value
-
-      RuleEngine.setContext(context)
-      await RuleEngine.evaluateAll()
-    },
-
-    /**
-     * 计算总价
-     */
-    async calculateTotalPrice() {
-      let totalPrice = 0
-      const breakdown = []
-
-      this.nodesMap.forEach((node, nodeId) => {
-        if (node.status === 'configured' && node.isVisible) {
-          const quantity = node.quantity || 1
-          let nodePrice = 0
-
-          // 如果选择了产品，使用产品价格
-          if (node.selectedProductId && node.product) {
-            nodePrice = node.product.price || 0
-          } else if (node.price) {
-            // 否则使用节点配置的价格
-            nodePrice = node.price
-          }
-
-          // 计算成本
-          if (node.costCalculationRule) {
-            try {
-              const context = RuleEngine.getContext()
-              RuleEngine.setContext(context)
-              
-              const func = new Function(
-                ...Object.keys(context),
-                `return ${node.costCalculationRule}`
-              )
-              nodePrice = func(...Object.values(context))
-            } catch (error) {
-              console.error('价格计算规则执行失败:', error)
-            }
-          }
-
-          const totalNodePrice = nodePrice * quantity
-
-          totalPrice += totalNodePrice
-
-          breakdown.push({
-            nodeId,
-            nodeName: node.nodeName,
-            quantity,
-            unitPrice: nodePrice,
-            totalPrice: totalNodePrice
-          })
-        }
-      })
-
-      this.pricing = {
-        totalPrice,
-        breakdown
-      }
-    },
-
-    /**
-     * 保存配置会话
-     */
+    // 保存配置会话
     async saveConfigSession() {
       try {
-        const sessionData = {
-          sessionId: this.configSession.sessionId,
-          bomId: this.configSession.bomId,
-          sessionName: this.configSession.sessionName,
-          status: 'saved',
-          configuration: this.configSession.configuration,
-          pricing: this.pricing,
-          remark: `保存于 ${new Date().toLocaleString()}`
-        }
-
-        // 如果是新会话，创建；否则更新
-        if (!this.configSession.savedToBackend) {
-          await addConfigSession(sessionData)
-          this.configSession.savedToBackend = true
-        } else {
-          await updateConfigSession(sessionData)
-        }
-
+        // 这里应该调用实际的API来保存配置会话
+        // 暂时模拟异步请求
+        await new Promise(resolve => setTimeout(resolve, 800))
         this.configSession.status = 'saved'
-        this.configSession.updatedAt = new Date()
-
-        ElMessage.success('配置已保存')
-        return true
+        console.log('保存配置会话成功')
       } catch (error) {
         console.error('保存配置会话失败:', error)
-        ElMessage.error('保存配置失败')
-        return false
+        throw error
       }
     },
-
-    /**
-     * 加载配置会话
-     * @param {String} sessionId - 会话ID
-     */
-    async loadConfigSession(sessionId) {
-      try {
-        const response = await getConfigSession(sessionId)
-        const sessionData = response.data
-
-        // 恢复会话数据
-        this.configSession = {
-          sessionId: sessionData.sessionId,
-          bomId: sessionData.bomId,
-          sessionName: sessionData.sessionName,
-          createdAt: new Date(sessionData.createTime),
-          updatedAt: new Date(sessionData.updateTime),
-          status: sessionData.sessionStatus,
-          configuration: JSON.parse(sessionData.configurationData || '{}'),
-          savedToBackend: true
-        }
-
-        // 恢复价格数据
-        if (sessionData.pricingData) {
-          this.pricing = JSON.parse(sessionData.pricingData)
-        }
-
-        // 恢复节点配置状态
-        Object.entries(this.configSession.configuration).forEach(([nodeId, config]) => {
-          const node = this.nodesMap.get(Number(nodeId))
-          if (node) {
-            node.status = 'configured'
-            node.configuration = config
-            node.quantity = config.quantity || node.defaultQuantity || 1
-            node.selectedProductId = config.selectedProductId || null
-          }
-        })
-
-        ElMessage.success('配置已加载')
-        return true
-      } catch (error) {
-        console.error('加载配置会话失败:', error)
-        ElMessage.error('加载配置失败')
-        return false
-      }
-    },
-
-    /**
-     * 完成配置
-     */
-    async completeConfiguration() {
-      // 验证配置完整性
-      if (!this.isConfigurationComplete) {
-        ElMessage.warning('请完成所有必选项的配置')
-        return false
-      }
-
-      // 最终校验
-      const valid = await this.runRuleEngine()
-      if (!valid) {
-        ElMessage.error('配置不符合规则要求')
-        return false
-      }
-
-      try {
-        // 先保存配置
-        const saved = await this.saveConfigSession()
-        if (!saved) {
-          return false
-        }
-
-        // 调用后端完成配置
-        if (this.configSession.savedToBackend) {
-          await completeConfigSession(this.configSession.sessionId)
-        }
-
-        this.configSession.status = 'completed'
-        this.configSession.updatedAt = new Date()
-
-        ElMessage.success('配置完成')
-        return true
-      } catch (error) {
-        console.error('完成配置失败:', error)
-        ElMessage.error('完成配置失败')
-        return false
-      }
-    },
-
-    /**
-     * 重置配置
-     */
+    // 重置配置
     resetConfiguration() {
-      this.nodesMap.forEach(node => {
-        node.status = 'unconfigured'
-        node.configuration = {}
-        node.quantity = node.defaultQuantity || 1
-        node.selectedProductId = null
-        node.isVisible = true
-        node.isDisabled = false
-      })
-
       this.configSession.configuration = {}
-      this.configSession.status = 'draft'
-      this.validationErrors = {}
+      this.configuredNodes = []
       this.pricing = {
+        breakdown: [],
         totalPrice: 0,
-        breakdown: []
+        productPrice: 0,
+        servicePrice: 0,
+        subtotal: 0
       }
-
-      RuleEngine.reset()
+      this.configurationSummary.configuredNodes = 0
+      this.configurationSummary.errors = 0
+    },
+    // 完成配置
+    completeConfiguration() {
+      if (this.configuredNodes.length === 0) {
+        return false
+      }
+      this.configSession.status = 'completed'
+      return true
+    },
+    // 更新节点数量
+    updateNodeQuantity(nodeId, quantity) {
+      console.log('更新节点数量:', nodeId, quantity)
+      // 查找并更新节点数量
+      const nodeIndex = this.configuredNodes.findIndex(node => node.bomStructureId === nodeId)
+      if (nodeIndex !== -1) {
+        this.configuredNodes[nodeIndex].quantity = quantity
+        // 更新价格等信息
+        this.updatePriceBreakdown(nodeId, this.configuredNodes[nodeIndex].configuration, this.configuredNodes[nodeIndex])
+      }
+    },
+    
+    // 更新产品数量
+    updateProductQuantity(nodeId, productId, quantity) {
+      console.log('更新产品数量:', nodeId, productId, quantity)
+      // 查找节点
+      const nodeIndex = this.configuredNodes.findIndex(node => node.bomStructureId === nodeId)
+      if (nodeIndex !== -1) {
+        const node = this.configuredNodes[nodeIndex]
+        // 更新节点配置中的产品数量
+        if (!node.configuration.productQuantities) {
+          node.configuration.productQuantities = {}
+        }
+        node.configuration.productQuantities[productId] = quantity
+        // 更新价格明细
+        this.updatePriceBreakdown(nodeId, node.configuration, node)
+      }
+    },
+    // 选择节点产品
+    selectNodeProduct(nodeId, productId) {
+      console.log('选择节点产品:', nodeId, productId)
+      // 查找节点，如果不存在则添加
+      let node = this.configuredNodes.find(n => n.bomStructureId === nodeId)
+      if (!node) {
+        // 模拟节点数据，实际应该从API获取
+        node = {
+          bomStructureId: nodeId,
+          nodeName: `节点${nodeId}`,
+          nodeType: '0',
+          quantity: 1,
+          configuration: {}
+        }
+        this.configuredNodes.push(node)
+        this.configurationSummary.configuredNodes++
+      }
+      // 更新节点配置
+      node.configuration.selectedProductId = productId
+    },
+    // 选择多个节点产品
+    selectNodeProducts(nodeId, productIds) {
+      console.log('选择多个节点产品:', nodeId, productIds)
+      // 查找节点，如果不存在则添加
+      let node = this.configuredNodes.find(n => n.bomStructureId === nodeId)
+      if (!node) {
+        // 模拟节点数据，实际应该从API获取
+        node = {
+          bomStructureId: nodeId,
+          nodeName: `节点${nodeId}`,
+          nodeType: '0',
+          quantity: 1,
+          configuration: {}
+        }
+        this.configuredNodes.push(node)
+        this.configurationSummary.configuredNodes++
+      }
+      // 更新节点配置
+      node.configuration.selectedProductIds = productIds
+    },
+    // 保存节点配置
+    async saveNodeConfiguration(nodeId, config) {
+      console.log('保存节点配置:', nodeId, config)
+      try {
+        // 这里应该调用实际的API来保存节点配置
+        // 暂时模拟异步请求
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // 查找节点，如果不存在则添加
+        let node = this.configuredNodes.find(n => n.bomStructureId === nodeId)
+        if (!node) {
+          // 模拟节点数据，实际应该从API获取
+          node = {
+            bomStructureId: nodeId,
+            nodeName: `节点${nodeId}`,
+            nodeType: '0',
+            quantity: config.quantity || 1,
+            configuration: {}
+          }
+          this.configuredNodes.push(node)
+          this.configurationSummary.configuredNodes++
+        }
+        
+        // 更新节点配置
+        node.quantity = config.quantity || 1
+        node.configuration = {
+          ...node.configuration,
+          ...config
+        }
+        
+        // 更新价格明细
+        this.updatePriceBreakdown(nodeId, config, node)
+        
+        return true
+      } catch (error) {
+        console.error('保存节点配置失败:', error)
+        return false
+      }
+    },
+    
+    // 更新价格明细
+    updatePriceBreakdown(nodeId, config, node) {
+      // 移除当前节点的所有现有价格明细条目，包括使用nodeId-index格式的条目
+      this.pricing.breakdown = this.pricing.breakdown.filter(item => 
+        typeof item.nodeId !== 'string' || !item.nodeId.startsWith(`${nodeId}`)
+      )
+      
+      // 获取所有选中的产品ID
+      let selectedProductIds = []
+      if (config) {
+        if (config.selectedProductId) {
+          // 单选模式 - 只显示一个产品
+          selectedProductIds = [config.selectedProductId]
+        } else if (Array.isArray(config.selectedProductIds)) {
+          // 多选模式 - 显示所有选中的产品
+          selectedProductIds = config.selectedProductIds
+        }
+      }
+      
+      // 获取节点类型，默认为'0'
+      const nodeType = node?.nodeType || '0'
+      
+      // 根据节点类型和选中产品情况处理
+      if (selectedProductIds.length > 0) {
+        // 有选中产品时，为每个选中的产品添加一行
+        selectedProductIds.forEach((productId, index) => {
+          // 准备产品信息
+          let productName = `产品${productId}`
+          let productModel = ''
+          
+          // 优先从productDetails获取产品名称和型号（新逻辑）
+          if (config && config.productDetails && config.productDetails[productId]) {
+            productName = config.productDetails[productId].name || productName
+            productModel = config.productDetails[productId].model || ''
+          } else if (config) {
+            // 向后兼容：尝试从其他地方获取产品型号
+            productModel = config.model || config.productModel || ''
+            
+            if (!productModel) {
+              productModel = config.attrs?.model || config.attrs?.productModel || 
+                            config.dynamicAttrs?.model || config.dynamicAttrs?.productModel || ''
+            }
+          }
+          
+          // 准备规格描述 - 只显示产品型号
+          let specification = productModel || ''
+          
+          // 计算产品数量
+          // 在多选模式下，每个产品使用独立的数量
+          // 尝试从配置中获取当前产品的独立数量
+          let quantity = 1
+          if (config && config.productQuantities) {
+            quantity = config.productQuantities[productId] || config.quantity || 1
+          } else {
+            quantity = config?.quantity || 1
+          }
+          const unitPrice = config?.price || 0
+          
+          // 添加产品条目
+          this.pricing.breakdown.push({
+            nodeId: `${nodeId}-${index}`, // 使用唯一ID避免覆盖
+            productName: productName,       // 名称直接使用产品名称
+            specification: specification,   // 规格描述直接使用产品型号
+            unitPrice: unitPrice,
+            quantity: quantity,
+            totalPrice: unitPrice * quantity
+          })
+        })
+      } else if (!['0', '1', '2'].includes(nodeType)) {
+        // 只有当节点类型不是0,1,2且没有选中产品时，才添加默认节点信息行
+        // 准备默认产品信息
+        let productName = node.nodeName // 默认使用节点名称
+        let productModel = '' // 产品型号
+        
+        // 尝试从配置中获取产品型号
+        if (config) {
+          productModel = config.model || config.productModel || ''
+          
+          // 如果没有直接的model属性，尝试从attrs或动态属性中获取
+          if (!productModel) {
+            productModel = config.attrs?.model || config.attrs?.productModel || 
+                          config.dynamicAttrs?.model || config.dynamicAttrs?.productModel || ''
+          }
+        }
+        
+        // 准备规格描述 - 只显示产品型号
+        let specification = productModel || ''
+        
+        // 添加默认条目
+        this.pricing.breakdown.push({
+          nodeId: nodeId,
+          productName: productName,
+          specification: specification,
+          unitPrice: config?.price || 0,
+          quantity: config?.quantity || 1,
+          totalPrice: (config?.price || 0) * (config?.quantity || 1)
+        })
+      }
+      
+      // 重新计算总价
+      this.recalculateTotalPrice()
+    },
+    
+    // 重新计算总价
+    recalculateTotalPrice() {
+      const total = this.pricing.breakdown.reduce((sum, item) => {
+        return sum + item.totalPrice
+      }, 0)
+      
+      // 更新总价
+      this.pricing.totalPrice = total
+      
+      // 计算产品价格（包含物料及组件费用）- 目前暂等于总价
+      this.pricing.productPrice = total
+      
+      // 服务费用 - 目前暂为0，后续可根据实际业务逻辑计算
+      this.pricing.servicePrice = 0
+      
+      // 未税总价 - 目前暂等于总价
+      this.pricing.subtotal = total
+    },
+    // 验证属性
+    async validateAttribute(nodeId, attributeCode, value) {
+      console.log('验证属性:', nodeId, attributeCode, value)
+      
+      // 查找节点
+      let node = this.configuredNodes.find(n => n.bomStructureId === nodeId)
+      if (!node) {
+        // 创建新节点
+        node = {
+          bomStructureId: nodeId,
+          nodeName: `节点${nodeId}`,
+          nodeType: '3', // 默认参数要求类型
+          quantity: 1,
+          configuration: {
+            attrs: {},
+            dynamicAttrs: {}
+          }
+        }
+        this.configuredNodes.push(node)
+        this.configurationSummary.configuredNodes++
+      }
+      
+      // 更新节点配置中的属性值
+      if (attributeCode.startsWith('dynamicAttrs.')) {
+        // 动态属性
+        const attrId = attributeCode.replace('dynamicAttrs.', '')
+        node.configuration.dynamicAttrs = {
+          ...node.configuration.dynamicAttrs,
+          [attrId]: value
+        }
+      } else {
+        // 静态属性
+        node.configuration.attrs = {
+          ...node.configuration.attrs,
+          [attributeCode]: value
+        }
+      }
+      
+      // 如果是参数要求类型，更新价格明细
+      if (node.nodeType === '3') {
+        this.updatePriceBreakdown(nodeId, node.configuration, node)
+      }
+      
+      return true
+    },
+    // 验证节点配置
+    async validateNodeConfiguration(nodeId, config) {
+      console.log('验证节点配置:', nodeId, config)
+      this.validationErrors = {}
+      return true
+    },
+    
+    // 删除产品
+    deleteProduct(nodeId) {
+      // 从价格明细中删除指定节点ID的产品
+      this.pricing.breakdown = this.pricing.breakdown.filter(item => item.nodeId !== nodeId)
+      // 重新计算总价
+      this.recalculateTotalPrice()
     }
   }
-})
+  })
+
+export default useConfiguratorStore

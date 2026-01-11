@@ -294,6 +294,7 @@ import {
   listSuperBomStructureAttribute,
   batchAddSuperBomStructureAttribute,
   updateSuperBomStructureAttribute,
+  deleteSuperBomStructureAttribute,
   // 导入属性值相关API
   listSuperBomStructureAttributeValue,
   listSuperBomStructureAttributeValueByBomStructureIdAndAttributeId,
@@ -513,14 +514,23 @@ const handleDeleteAttribute = async (row) => {
       type: 'warning'
     })
     
-    // 注意：API文档中没有提供专门的删除属性接口
-    // 这里使用前端模拟删除，实际项目中可能需要根据后端API调整
+    console.log('开始删除属性:', row)
+    console.log('要删除的属性ID:', row.id)
+    
+    // 直接调用删除接口删除属性
+    console.log('调用deleteSuperBomStructureAttribute API，属性ID:', row.id)
+    const response = await deleteSuperBomStructureAttribute(row.id)
+    console.log('API调用成功，返回结果:', response)
+    
+    // 更新本地属性列表
     attributeList.value = attributeList.value.filter(item => item.id !== row.id)
     ElMessage.success('属性删除成功')
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败')
       console.error('删除属性失败:', error)
+      console.error('错误详情:', error.response?.data || error.message)
+      console.error('错误堆栈:', error.stack)
     }
   }
 }
@@ -536,9 +546,18 @@ const handleBatchDelete = async () => {
       type: 'warning'
     })
     
+    // 获取选中的属性ID列表
     const ids = selectedAttributes.value.map(item => item.id)
-    // 注意：API文档中没有提供专门的批量删除属性接口
-    // 这里使用前端模拟批量删除，实际项目中可能需要根据后端API调整
+    
+    console.log('开始批量删除属性，选中数量:', selectedAttributes.value.length)
+    console.log('要删除的属性ID列表:', ids)
+    
+    // 直接调用删除接口进行批量删除
+    console.log('调用deleteSuperBomStructureAttribute API进行批量删除')
+    const response = await deleteSuperBomStructureAttribute(ids.join(','))
+    console.log('API调用成功，返回结果:', response)
+    
+    // 更新本地属性列表
     attributeList.value = attributeList.value.filter(item => !ids.includes(item.id))
     selectedAttributes.value = []
     ElMessage.success('批量删除成功')
@@ -546,6 +565,8 @@ const handleBatchDelete = async () => {
     if (error !== 'cancel') {
       ElMessage.error('批量删除失败')
       console.error('批量删除属性失败:', error)
+      console.error('错误详情:', error.response?.data || error.message)
+      console.error('错误堆栈:', error.stack)
     }
   }
 }
@@ -588,8 +609,22 @@ const handleSubmit = async () => {
     if (attributeForm.id) {
       // 编辑模式
       try {
-        // 使用真实API更新属性
-        await updateSuperBomStructureAttribute(attributeForm.bomStructureId, [submitData])
+        // 找到要更新的属性在列表中的索引
+        const index = attributeList.value.findIndex(item => item.id === attributeForm.id)
+        if (index !== -1) {
+          // 更新本地属性列表中的属性
+          attributeList.value[index] = { ...submitData }
+        }
+        
+        // 准备要发送到API的数据，确保只发送接口文档中要求的字段
+        const allAttributes = attributeList.value.map(attr => ({
+          bomStructureId: attr.bomStructureId || props.bomStructureId,
+          attributeId: attr.attributeId,
+          sortOrder: attr.sortOrder || 100
+        }))
+        
+        // 使用真实API更新属性，发送整个属性列表
+        await updateSuperBomStructureAttribute(attributeForm.bomStructureId, allAttributes)
         await loadAttributeList() // 重新加载属性列表
         ElMessage.success('属性更新成功')
         dialogVisible.value = false
@@ -600,8 +635,8 @@ const handleSubmit = async () => {
     } else {
       // 新增模式
       try {
-        // 使用真实API新增属性
-        await batchAddSuperBomStructureAttribute([submitData])
+        // 使用真实API新增属性，直接发送单个对象
+        await batchAddSuperBomStructureAttribute(submitData)
         await loadAttributeList() // 重新加载属性列表
         ElMessage.success('属性新增成功')
         dialogVisible.value = false

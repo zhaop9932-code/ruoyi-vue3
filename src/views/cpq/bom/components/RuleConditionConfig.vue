@@ -18,6 +18,14 @@
               </el-button>
             </div>
             <el-button 
+              type="info" 
+              size="small" 
+              @click="refreshConditions"
+              :loading="conditionsLoading"
+            >
+              <el-icon><Refresh /></el-icon> 刷新条件
+            </el-button>
+            <el-button 
               type="primary" 
               size="small" 
               @click="handleSave"
@@ -251,7 +259,7 @@
                             type="danger" 
                             size="small" 
                             icon="Delete"
-                            @click.stop="element.children.splice(childIndex, 1); updateParent()"
+                            @click.stop="removeCondition(childIndex, element.children)"
                           />
                         </div>
                         
@@ -428,8 +436,8 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { Plus, Delete, Rank, ChatDotRound, Check } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Plus, Delete, Rank, ChatDotRound, Check, Refresh } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import draggable from 'vuedraggable'
 
 // 导入BOM结构API
@@ -490,6 +498,9 @@ const emit = defineEmits(['update:modelValue', 'update:conditions'])
 
 // 条件列表
 const conditions = ref([...props.modelValue])
+
+// 条件加载状态
+const conditionsLoading = ref(false)
 
 // 活跃的条件类型
 const activeConditionType = ref('number')
@@ -615,25 +626,30 @@ const convertListToTree = (list) => {
   const tree = []
   const map = new Map()
   
-  // 构建节点映射，确保每个节点都有children属性
+  // 构建节点映射，确保每个节点都有children属性，并将bomStructureId转换为字符串类型
   list.forEach(item => {
-    map.set(item.bomStructureId, {
+    // 将bomStructureId转换为字符串类型，确保与级联选择器的v-model类型匹配
+    const bomStructureIdStr = String(item.bomStructureId)
+    map.set(bomStructureIdStr, {
       ...item,
+      bomStructureId: bomStructureIdStr, // 确保节点ID为字符串类型
       children: []
     })
   })
   
   // 构建树状结构
   list.forEach(item => {
-    const node = map.get(item.bomStructureId)
+    const bomStructureIdStr = String(item.bomStructureId)
+    const node = map.get(bomStructureIdStr)
     const parentNodeId = item.parentNodeId || 0
+    const parentNodeIdStr = String(parentNodeId)
     
-    if (parentNodeId === 0 || !map.has(parentNodeId)) {
+    if (parentNodeId === 0 || !map.has(parentNodeIdStr)) {
       // 根节点
       tree.push(node)
     } else {
       // 子节点
-      const parentNode = map.get(parentNodeId)
+      const parentNode = map.get(parentNodeIdStr)
       parentNode.children.push(node)
     }
   })
@@ -642,25 +658,73 @@ const convertListToTree = (list) => {
 }
 
 // 监听BOM ID变化，重新加载节点和变量
-watch(() => props.bomId, (newBomId) => {
+watch(() => props.bomId, async (newBomId) => {
   if (newBomId) {
-    loadBomNodes()
-    loadBomVariables()
+    // 先加载节点和变量数据
+    await Promise.all([
+      loadBomNodes(),
+      loadBomVariables()
+    ])
+    
+    // 如果已有规则ID，重新加载条件，确保节点数据已准备就绪
+    if (props.ruleId) {
+      await loadConditionsByRuleId(props.ruleId)
+    }
   } else {
     bomNodes.value = []
     bomNodeTree.value = []
     bomVariables.value = []
+    conditions.value = [...props.modelValue]
   }
 })
 
 // 监听规则ID变化，重新加载条件
-watch(() => props.ruleId, (newRuleId) => {
+watch(() => props.ruleId, async (newRuleId) => {
   if (newRuleId) {
-    loadConditionsByRuleId(newRuleId)
+    // 确保节点数据已加载完成
+    if (props.bomId && bomNodesOptions.value.length === 0) {
+      await loadBomNodes()
+    }
+    await loadConditionsByRuleId(newRuleId)
   } else {
     conditions.value = [...props.modelValue]
   }
 })
+
+// 监听节点数据变化，重新处理条件，确保级联选择器正确回显
+watch(bomNodesOptions, async (newOptions) => {
+  if (newOptions.length > 0 && conditions.value.length > 0) {
+    // 重新处理所有条件节点，确保node值与级联选择器匹配
+    await processConditions(conditions.value)
+  }
+})
+
+// 递归处理条件节点，加载字段和属性值数据
+const processConditions = async (condList) => {
+  for (const condition of condList) {
+    // 处理简单条件
+    if (condition.configType === 'simple') {
+      // 确保节点ID类型与级联选择器匹配（统一转换为字符串类型）
+      if (condition.node && typeof condition.node !== 'string') {
+        condition.node = String(condition.node)
+      }
+      
+      // 加载节点字段数据
+      if (condition.judgeType !== 'variable' && condition.node) {
+        await loadFieldsByJudgeTypeAndNode(condition.judgeType, condition.node, condition)
+        
+        // 如果是选择类型，加载属性值数据
+        if (condition.type === 'select' && condition.field) {
+          await handleFieldChange(condition)
+        }
+      }
+    } 
+    // 处理复杂条件，递归处理子条件
+    else if (condition.children && condition.children.length > 0) {
+      await processConditions(condition.children)
+    }
+  }
+}
 
 // 加载规则条件
 const loadConditionsByRuleId = async (ruleId) => {
@@ -670,6 +734,9 @@ const loadConditionsByRuleId = async (ruleId) => {
     const response = await listRuleConditionsByRuleId(ruleId)
     if (response.code === 200) {
       conditions.value = response.data || []
+      
+      // 处理所有条件节点，加载字段和属性值数据
+      await processConditions(conditions.value)
     } else {
       ElMessage.error('加载条件失败：' + response.message)
     }
@@ -734,7 +801,7 @@ const loadStaticAttrs = async (bomStructureId) => {
   if (dynamicFields.value.staticAttrs.has(bomStructureId)) return
   
   try {
-    const response = await listSuperBomStructureAttributeByBomStructureId(bomStructureId)
+    const response = await listSuperBomStructureAttributeByBomStructureId(props.bomId, bomStructureId)
     
     // 正确处理各种响应格式
     let staticAttrs = []
@@ -853,14 +920,18 @@ const loadProductFields = async (bomStructureId) => {
 }
 
 // 组件挂载时加载节点和变量
-onMounted(() => {
+onMounted(async () => {
   if (props.bomId) {
-    loadBomNodes()
-    loadBomVariables()
+    // 先加载节点和变量数据
+    await Promise.all([
+      loadBomNodes(),
+      loadBomVariables()
+    ])
   }
   
   if (props.ruleId) {
-    loadConditionsByRuleId(props.ruleId)
+    // 等节点数据加载完成后，再加载条件列表
+    await loadConditionsByRuleId(props.ruleId)
   }
 })
 
@@ -1231,17 +1302,46 @@ const addChildCondition = (parentCondition) => {
 }
 
 // 移除条件
-const removeCondition = (index, parentConditions = null) => {
+const removeCondition = async (index, parentConditions = null) => {
   const targetConditions = parentConditions || conditions.value
+  const conditionToRemove = targetConditions[index]
   
-  targetConditions.splice(index, 1)
+  // 显示确认对话框
+  const confirmed = await ElMessageBox.confirm(
+    '确定要删除这个条件吗？',
+    '删除确认',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).catch(() => false)
   
-  // 更新剩余条件的逻辑关系
-  if (targetConditions.length > 0) {
-    targetConditions[0].logic = ''
+  if (!confirmed) {
+    return
   }
   
-  updateParent()
+  try {
+    // 检查是否有有效的conditionId
+    if (conditionToRemove.conditionId && conditionToRemove.conditionId !== null && conditionToRemove.conditionId !== '') {
+      // 调用后端删除接口
+      await deleteRuleCondition(conditionToRemove.conditionId)
+      ElMessage.success('条件删除成功')
+    }
+    
+    // 执行前端删除操作
+    targetConditions.splice(index, 1)
+    
+    // 更新剩余条件的逻辑关系
+    if (targetConditions.length > 0) {
+      targetConditions[0].logic = ''
+    }
+    
+    updateParent()
+  } catch (error) {
+    console.error('删除条件失败:', error)
+    ElMessage.error('删除条件失败：' + (error.response?.data?.message || error.message || '未知错误'))
+  }
 }
 
 // 保存条件
@@ -1460,6 +1560,31 @@ const useDeepSeekSuggestion = async () => {
   } catch (error) {
     console.error('DeepSeek API调用失败:', error)
     aiSuggestion.value = 'DeepSeek API调用失败，请稍后重试'
+  }
+}
+
+// 刷新条件列表
+const refreshConditions = async () => {
+  // 检查规则ID是否存在
+  if (!props.ruleId) {
+    ElMessage.warning('规则ID不能为空，无法刷新条件。请先选择或创建规则。')
+    return
+  }
+  
+  try {
+    // 设置加载状态
+    conditionsLoading.value = true
+    
+    // 调用现有的加载条件函数
+    await loadConditionsByRuleId(props.ruleId)
+    
+    ElMessage.success('条件列表刷新成功')
+  } catch (error) {
+    console.error('刷新条件失败:', error)
+    ElMessage.error('刷新条件失败：' + (error.response?.data?.message || error.message || '未知错误'))
+  } finally {
+    // 恢复加载状态
+    conditionsLoading.value = false
   }
 }
 

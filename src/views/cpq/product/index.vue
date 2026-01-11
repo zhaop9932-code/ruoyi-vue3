@@ -101,7 +101,11 @@
 
           <!-- 价格信息标签页 -->
           <el-tab-pane label="价格信息" name="price">
-            <ProductPriceInfo v-model:form="form" />
+            <ProductPriceInfo 
+              v-model:form="form" 
+              :product-id="form.productId"
+              ref="priceInfoRef"
+            />
           </el-tab-pane>
 
           <!-- 资料信息标签页 -->
@@ -165,7 +169,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, getCurrentInstance } from 'vue'
+import { ref, reactive, onMounted, onActivated, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { listProduct, addProduct, updateProduct, deleteProduct, listProductAttributeRelation, batchUpdateProductAttributeRelation, autoIntegrateCatalogAttributes, exportProduct } from '@/api/cpq/product'
 import { getAllBrand } from '@/api/cpq/brand'
@@ -237,12 +241,16 @@ const imageListFileList = ref([])
 
 // 产品属性相关
 const attributesRef = ref(null) // 产品属性组件引用，用于手动触发属性刷新和获取属性
+const priceInfoRef = ref(null) // 价格信息组件引用，用于手动触发价格保存
 
 // 标签页切换处理函数
 const handleTabChange = (tabName) => {
   if (tabName === 'attributes' && attributesRef.value) {
     // 切换到产品属性标签页，手动触发属性获取
     attributesRef.value.refresh()
+  } else if (tabName === 'price' && priceInfoRef.value && form.productId) {
+    // 切换到价格信息标签页，手动触发价格信息获取
+    priceInfoRef.value.fetchProductPriceInfo()
   }
 }
 
@@ -253,7 +261,7 @@ const form = reactive({
   productDesc: '',
   productStatus: '1',
   productVersion: 'V1.0',
-  catalogId: '',
+  catalogId: null,
   basePrice: null,
   priceUnit: 'CNY',
   mainImageUrl: '',
@@ -279,7 +287,10 @@ const form = reactive({
   minSalesPrice: null,
   maxSalesPrice: null,
   suggestedRetailPrice: null,
-  priceValidityPeriod: null
+  priceValidityPeriod: null,
+  priceType: null,
+  currency: null,
+  priceId: null
 })
 const queryParams = reactive({
   pageNum: 1,
@@ -293,8 +304,6 @@ const rules = reactive({
   productStatus: [{ required: true, message: '产品状态不能为空', trigger: 'change' }],
   catalogId: [{ required: true, message: '所属目录不能为空', trigger: 'change' }],
   productVersion: [{ required: true, message: '产品版本不能为空', trigger: 'blur' }],
- 
-  priceUnit: [{ required: true, message: '价格单位不能为空', trigger: 'change' }],
   mainImageUrl: [
     { required: false, message: '请上传产品主图', trigger: 'change' },
     { type: 'url', message: '请输入有效的URL地址', trigger: 'blur' }
@@ -314,6 +323,17 @@ const rules = reactive({
   videoUrl: [
     { type: 'url', message: '请输入有效的URL地址', trigger: 'blur' }
   ],
+  // 价格相关字段改为非必填
+
+  priceUnit: [{ required: false, message: '请选择价格单位', trigger: 'change' }],
+  costPrice: [{ required: false, message: '请输入成本价格', trigger: 'blur' },
+    { type: 'number', transform: (value) => Number(value), min: 0, message: '成本价格必须大于等于0', trigger: 'blur' }],
+  minSalesPrice: [{ required: false, message: '请输入最小销售价格', trigger: 'blur' },
+    { type: 'number', transform: (value) => Number(value), min: 0, message: '最小销售价格必须大于等于0', trigger: 'blur' }],
+  maxSalesPrice: [{ required: false, message: '请输入最大销售价格', trigger: 'blur' },
+    { type: 'number', transform: (value) => Number(value), min: 0, message: '最大销售价格必须大于等于0', trigger: 'blur' }],
+  suggestedRetailPrice: [{ required: false, message: '请输入建议零售价', trigger: 'blur' },
+    { type: 'number', transform: (value) => Number(value), min: 0, message: '建议零售价必须大于等于0', trigger: 'blur' }],
   // 新增字段验证规则
   brandId: [{ required: false, message: '请选择所属品牌', trigger: 'change' }],
   seriesId: [{ required: false, message: '请选择所属系列', trigger: 'change' }],
@@ -322,7 +342,7 @@ const rules = reactive({
   packagingUnit: [{ required: false, message: '请输入包装单位', trigger: 'blur' }],
   weight: [
     { required: false, message: '请输入产品重量', trigger: 'blur' },
-    { type: 'number', min: 0, message: '产品重量必须大于等于0', trigger: 'blur' }
+    { type: 'number', transform: (value) => Number(value), min: 0, message: '产品重量必须大于等于0', trigger: 'blur' }
   ],
   dimensions: [{ required: false, message: '请输入产品尺寸', trigger: 'blur' }]
 })
@@ -363,7 +383,7 @@ const handleAdd = () => {
   form.productDesc = ''
   form.productStatus = '1'
   form.productVersion = 'V1.0'
-  form.catalogId = ''
+  form.catalogId = null
   form.basePrice = null
   form.priceUnit = 'CNY'
   form.mainImageUrl = ''
@@ -390,6 +410,9 @@ const handleAdd = () => {
   form.maxSalesPrice = null
   form.suggestedRetailPrice = null
   form.priceValidityPeriod = null
+  form.priceType = null
+  form.currency = null
+  form.priceId = null
 
   // 清空图片列表和文件列表
   imageList.value = []
@@ -407,14 +430,22 @@ const handleAdd = () => {
 
 
 
-const handleUpdate = (row) => {
+const handleUpdate = async (row) => {
+  // 1. 先加载所有必要的列表数据
+  await Promise.all([
+    getBrandList(), // 加载品牌列表
+    getCatalogTree() // 加载目录树
+  ])
+  
+  // 2. 赋值产品数据
   form.productId = row.productId
   form.productCode = row.productCode
   form.productName = row.productName
   form.productDesc = row.productDesc || ''
   form.productStatus = row.productStatus
   form.productVersion = row.productVersion || 'V1.0'
-  form.catalogId = row.catalogId
+  // 确保catalogId为数字类型，与后端Long类型匹配
+  form.catalogId = row.catalogId ? Number(row.catalogId) : null
   form.basePrice = row.basePrice
   form.priceUnit = row.priceUnit || 'CNY'
   form.mainImageUrl = row.mainImageUrl || ''
@@ -424,9 +455,11 @@ const handleUpdate = (row) => {
   form.manualUrl = row.manualUrl || ''
   form.installationGuideUrl = row.installationGuideUrl || ''
   form.videoUrl = row.videoUrl || ''
+  
   // 基本信息字段
-  form.brandId = row.brandId || null
-  form.seriesId = row.seriesId || null
+  // 确保brandId和seriesId为数字类型
+  form.brandId = row.brandId ? Number(row.brandId) : null
+  form.seriesId = row.seriesId ? Number(row.seriesId) : null
   form.materialType = row.materialType || null
   form.productModel = row.productModel || ''
   form.packagingUnit = row.packagingUnit || ''
@@ -435,6 +468,7 @@ const handleUpdate = (row) => {
   form.warrantyPeriod = row.warrantyPeriod || null
   form.specification = row.specification || ''
   form.technicalParams = row.technicalParams || ''
+  
   // 价格相关字段
   form.costPrice = row.costPrice || null
   form.minSalesPrice = row.minSalesPrice || null
@@ -442,12 +476,24 @@ const handleUpdate = (row) => {
   form.suggestedRetailPrice = row.suggestedRetailPrice || null
   form.priceValidityPeriod = row.priceValidityPeriod || null
 
-  // 初始化BOM列表
+  // 3. 初始化BOM列表和特性参数列表
   bomList.value = row.bomList || []
-
-  // 初始化特性参数列表
   paramList.value = row.paramList || []
-
+  
+  // 4. 最后处理品牌和系列，触发watch更新系列列表
+  // 先保存原始系列ID，用于后续恢复
+  const originalSeriesId = row.seriesId || null
+  // 赋值品牌ID，触发watch监听器加载系列列表
+  form.brandId = row.brandId ? Number(row.brandId) : null
+  
+  // 5. 等待系列列表加载完成后，恢复原始系列ID
+  if (originalSeriesId) {
+    // 使用setTimeout确保系列列表已经加载完成
+    setTimeout(() => {
+      form.seriesId = originalSeriesId ? Number(originalSeriesId) : null
+    }, 0)
+  }
+  
   title.value = '修改产品'
   open.value = true
 }
@@ -531,23 +577,37 @@ const submitForm = async () => {
     // 表单验证
     await formElement.validate()
     
+    // 显示加载状态
+    loading.value = true
     
-
+    // 整合所有标签页的数据
+    const productData = {
+      ...form,
+      bomList: bomList.value,
+      paramList: paramList.value
+    }
+    
     let res
     if (form.productId) {
-      res = await updateProduct(form)
+      // 修改产品
+      res = await updateProduct(productData)
       ElMessage.success('修改成功')
       
       // 如果选择了产品目录，自动集成目录属性
       if (form.catalogId) {
         await autoIntegrateCatalogAttributes(form.productId)
-        // 如果当前在产品属性标签页，保存用户输入的属性值
-        if (activeTab.value === 'attributes') {
-          await saveProductAttributes()
-        }
+      }
+      
+      // 保存产品属性
+      await saveProductAttributes()
+      
+      // 保存价格信息
+      if (priceInfoRef.value) {
+        await priceInfoRef.value.handlePriceSave()
       }
     } else {
-      res = await addProduct(form)
+      // 新增产品
+      res = await addProduct(productData)
       // 设置产品ID，以便后续操作
       if (res.data) {
         form.productId = res.data
@@ -557,10 +617,13 @@ const submitForm = async () => {
       // 如果选择了产品目录，自动集成目录属性
       if (form.catalogId && form.productId) {
         await autoIntegrateCatalogAttributes(form.productId)
-        // 如果当前在产品属性标签页，保存用户输入的属性值
-        if (activeTab.value === 'attributes' && productAttributes.value.length > 0) {
-          await saveProductAttributes()
-        }
+        // 保存产品属性
+        await saveProductAttributes()
+      }
+      
+      // 保存价格信息
+      if (priceInfoRef.value) {
+        await priceInfoRef.value.handlePriceSave()
       }
     }
     
@@ -573,6 +636,9 @@ const submitForm = async () => {
     } else {
       ElMessage.error('操作失败：' + (error.message || '未知错误'))
     }
+  } finally {
+    // 隐藏加载状态
+    loading.value = false
   }
 }
 
@@ -585,6 +651,10 @@ const cancel = () => {
   // 清空BOM列表和特性参数列表
   bomList.value = []
   paramList.value = []
+  // 重置新增的价格相关字段
+  form.priceType = null
+  form.currency = null
+  form.priceId = null
 }
 
 // 获取品牌列表
@@ -753,6 +823,12 @@ watch(
 onMounted(async () => {
   // 获取用户store实例
   const userStore = useUserStore()
+  await Promise.all([getBrandList(), getCatalogTree()])
+  getList()
+})
+
+// 组件激活时重新加载数据
+onActivated(async () => {
   await Promise.all([getBrandList(), getCatalogTree()])
   getList()
 })

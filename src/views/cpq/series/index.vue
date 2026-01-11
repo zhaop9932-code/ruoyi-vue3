@@ -540,7 +540,7 @@
 </style>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
+import { ref, reactive, onMounted, onActivated, getCurrentInstance } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { listSeries, getSeries, addSeries, updateSeries, delSeries, listBrand, exportSeries } from '@/api/cpq/series'
@@ -967,5 +967,14 @@ onMounted(async () => {
   await getTreeselect() // 加载目录树数据
   getList()
   console.log('初始数据加载完成')
+})
+
+// 组件激活时重新加载数据
+onActivated(async () => {
+  console.log('组件激活，开始重新加载数据...')
+  await getBrandList()
+  await getTreeselect() // 加载目录树数据
+  getList()
+  console.log('数据重新加载完成')
 })
 </script>

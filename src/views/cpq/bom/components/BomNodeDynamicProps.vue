@@ -105,11 +105,14 @@
         </el-form-item>
         <el-form-item label="组件类型" prop="componentType">
           <el-select v-model="propForm.componentType" placeholder="请选择组件类型">
-            <el-option label="输入框" value="input" />
-            <el-option label="下拉框" value="select" />
-            <el-option label="单选框" value="radio" />
-            <el-option label="多选框" value="checkbox" />
-            <el-option label="数字输入框" value="input-number" />
+            <el-option label="单行文本输入框" value="input" />
+            <el-option label="多行文本输入框" value="textarea" />
+            <el-option label="下拉单选" value="select" />
+            <el-option label="下拉多选" value="multiple-select" />
+            <el-option label="单选框组" value="radio" />
+            <el-option label="多选框组" value="checkbox" />
+            <el-option label="滑块" value="slider" />
+            <el-option label="开关" value="switch" />
           </el-select>
         </el-form-item>
         <el-form-item label="是否必填" prop="isRequired">
@@ -189,7 +192,7 @@ const propForm = reactive({
   attributeValues: [],
   isRequired: '0',
   defaultValue: '',
-  sortOrder: 0
+  sortOrder: 100
 })
 
 // 表单验证规则

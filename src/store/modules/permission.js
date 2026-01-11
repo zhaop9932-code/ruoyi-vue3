@@ -4,7 +4,6 @@ import { getRouters } from '@/api/menu'
 import Layout from '@/layout/index'
 import ParentView from '@/components/ParentView'
 import InnerLink from '@/layout/components/InnerLink'
-import { isExternal } from '@/utils/validate'
 
 // 匹配views里面所有的.vue文件
 const modules = import.meta.glob('@/views/**/*.vue')
@@ -45,9 +44,27 @@ const usePermissionStore = defineStore(
             const defaultRoutes = filterAsyncRouter(defaultData)
             const asyncRoutes = filterDynamicRoutes(dynamicRoutes)
             
-            // 添加动态路由到路由实例
-            addRoutesToRouter(router, asyncRoutes)
-            addRoutesToRouter(router, rewriteRoutes)
+            // 添加动态路由到路由表
+            asyncRoutes.forEach(route => { router.addRoute(route) })
+            
+            // 添加从后端获取的路由到路由表
+            rewriteRoutes.forEach(route => {
+              if (!route.path.startsWith('http') && !route.path.startsWith('https')) {
+                try {
+                  router.addRoute(route)
+                  console.log(`成功添加路由: ${route.path}`)
+                } catch (error) {
+                  console.error(`添加路由失败: ${route.path}`, error)
+                }
+              }
+            })
+            
+            // 添加404路由到最后
+            router.addRoute({
+              path: "/:pathMatch(.*)*",
+              component: () => import('@/views/error/404.vue'),
+              hidden: true
+            })
             
             this.setRoutes(rewriteRoutes)
             this.setSidebarRouters(constantRoutes.concat(sidebarRoutes))
@@ -67,11 +84,8 @@ function filterAsyncRouter(asyncRouterMap, lastRouter = false, type = false) {
       route.children = filterChildren(route.children)
     }
     if (route.component) {
-      // 处理对象类型的component属性
-      if (typeof route.component === 'object') {
-        console.warn(`发现对象类型的component属性: ${route.path}`);
-        route.component = Layout;
-      } else if (route.component === 'Layout') {
+      // Layout ParentView 组件特殊处理
+      if (route.component === 'Layout') {
         route.component = Layout
       } else if (route.component === 'ParentView') {
         route.component = ParentView
@@ -84,8 +98,8 @@ function filterAsyncRouter(asyncRouterMap, lastRouter = false, type = false) {
     if (route.children != null && route.children && route.children.length) {
       route.children = filterAsyncRouter(route.children, route, type)
     } else {
-      // 不要删除redirect属性，确保路由能正确重定向
       delete route['children']
+      delete route['redirect']
     }
     return true
   })
@@ -94,10 +108,7 @@ function filterAsyncRouter(asyncRouterMap, lastRouter = false, type = false) {
 function filterChildren(childrenMap, lastRouter = false) {
   var children = []
   childrenMap.forEach(el => {
-    // 跳过外部链接，外部链接不需要拼接父路径
-    if (!isExternal(el.path)) {
-      el.path = lastRouter ? lastRouter.path + '/' + el.path : el.path
-    }
+    el.path = lastRouter ? lastRouter.path + '/' + el.path : el.path
     if (el.children && el.children.length && el.component === 'ParentView') {
       children = children.concat(filterChildren(el.children, el))
     } else {
@@ -105,17 +116,6 @@ function filterChildren(childrenMap, lastRouter = false) {
     }
   })
   return children
-}
-
-// 添加路由到路由实例
-export function addRoutesToRouter(router, routes) {
-  routes.forEach(route => {
-    // 跳过外部链接，外部链接由前端通过window.open处理
-    if (!isExternal(route.path)) {
-      // 直接添加整个路由对象，包括其children
-      router.addRoute(route)
-    }
-  })
 }
 
 // 动态路由遍历，验证是否具备权限
@@ -135,55 +135,86 @@ export function filterDynamicRoutes(routes) {
   return res
 }
 
+// 组件加载函数，使用import.meta.glob预加载所有组件
 export const loadView = (view) => {
-  let res
   // 确保view是字符串
   if (typeof view !== 'string') {
-    console.error(`组件路径不是字符串: ${view}`);
+    console.error(`组件路径不是字符串: ${view}`)
     return () => import('@/views/error/404.vue')
   }
   
-  // 标准化组件路径，移除首尾斜杠
-  const normalizedView = view.replace(/^\/+|\/+$/g, '')
+  // 标准化组件路径，确保格式统一
+  let normalizedView = view
+  
+  // 处理各种可能的组件路径格式
+  if (normalizedView.startsWith('@/views/')) {
+    // 已标准化路径，直接使用
+    normalizedView = normalizedView
+  } else if (normalizedView.startsWith('./views/')) {
+    normalizedView = normalizedView.replace('./views/', '@/views/')
+  } else if (normalizedView.startsWith('../views/')) {
+    normalizedView = normalizedView.replace('../views/', '@/views/')
+  } else if (normalizedView.startsWith('/views/')) {
+    normalizedView = '@' + normalizedView
+  } else if (normalizedView.startsWith('./')) {
+    normalizedView = '@/views/' + normalizedView.replace('./', '')
+  } else if (normalizedView.startsWith('../')) {
+    normalizedView = '@/views/' + normalizedView.replace('../', '')
+  } else if (!normalizedView.startsWith('@/')) {
+    // 默认情况，添加@/views/前缀
+    normalizedView = '@/views/' + normalizedView
+  }
+  
+  // 确保路径以.vue结尾
+  if (!normalizedView.endsWith('.vue')) {
+    normalizedView += '.vue'
+  }
+  
+  // 查找匹配的组件
+  for (const path in modules) {
+    if (path === normalizedView) {
+      console.log(`找到组件: ${view} -> ${path}`)
+      return modules[path]
+    }
+  }
+  
+  // 如果没有找到组件，尝试移除.vue扩展名再次查找
+  const viewWithoutExt = normalizedView.replace('.vue', '')
+  for (const path in modules) {
+    if (path === viewWithoutExt) {
+      console.log(`找到组件: ${view} -> ${path}`)
+      return modules[path]
+    }
+  }
+  
+  // 如果仍然没有找到，尝试更宽松的匹配，但避免匹配错误的组件
+  // 只在没有找到精确匹配时使用，且只匹配包含完整路径段的组件
+  const viewPathParts = normalizedView.split('/')
+  const viewName = viewPathParts.pop().replace('.vue', '')
+  const viewDir = viewPathParts.pop()
   
   for (const path in modules) {
-    let dir
-    // 处理@/views/开头的路径
-    if (path.startsWith('@/views/')) {
-      dir = path.replace('@/views/', '').replace('.vue', '')
-    } else {
-      // 处理其他路径格式
-      dir = path.replace(/^.*views\//, '').replace('.vue', '')
-    }
-    
-    // 标准化dir路径，移除首尾斜杠
-    const normalizedDir = dir.replace(/^\/+|\/+$/g, '')
-    
-    if (normalizedDir === normalizedView) {
+    // 尝试匹配包含视图目录和视图名称的路径，提高匹配准确性
+    if (path.includes(viewDir) && path.includes(viewName)) {
       console.log(`找到组件: ${view} -> ${path}`)
-      res = () => modules[path]()
-      break
+      return modules[path]
     }
   }
   
-  // 如果找到组件，返回组件加载函数
-  if (res) {
-    return res
+  // 如果还是没有找到，尝试匹配最后一部分路径
+  const lastTwoParts = `${viewDir}/${viewName}`
+  for (const path in modules) {
+    if (path.includes(lastTwoParts)) {
+      console.log(`找到组件: ${view} -> ${path}`)
+      return modules[path]
+    }
   }
   
-  // 如果没有找到组件，打印所有可用路径以便调试
-  console.error(`未找到组件: ${view}`)
-  console.log('可用的组件路径:', Object.keys(modules).map(p => {
-    let dir
-    if (p.startsWith('@/views/')) {
-      dir = p.replace('@/views/', '').replace('.vue', '')
-    } else {
-      dir = p.replace(/^.*views\//, '').replace('.vue', '')
-    }
-    return dir
-  }))
+  // 如果没有找到组件，打印错误信息
+  console.error(`未找到组件: ${view}，标准化路径: ${normalizedView}`)
+  console.log('可用的组件路径:', Object.keys(modules))
   
-  // 返回404组件，避免页面空白
+  // 返回404组件
   return () => import('@/views/error/404.vue')
 }
 
