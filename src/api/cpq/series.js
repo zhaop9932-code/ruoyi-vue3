@@ -85,8 +85,30 @@ export function checkSeriesCodeUnique(seriesCode) {
 export function exportSeries(query) {
   return request({
     url: '/cpq/brand/series/export',
-    method: 'get',
-    params: query
+    method: 'post',
+    data: query,
+    responseType: 'blob'
+  })
+}
+
+// 下载系列导入模板
+export function downloadSeriesImportTemplate() {
+  return request({
+    url: '/cpq/brand/series/importTemplate',
+    method: 'post',
+    responseType: 'blob'
+  })
+}
+
+// 导入系列数据
+export function importSeriesData(data) {
+  return request({
+    url: '/cpq/brand/series/importData',
+    method: 'post',
+    data: data,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
   })
 }
 

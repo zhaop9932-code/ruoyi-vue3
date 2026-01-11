@@ -50,6 +50,9 @@
               :value="series.seriesId" />
           </el-select>
         </el-form-item>
+        <el-form-item label="产品型号" prop="productModel">
+          <el-input v-model="form.productModel" placeholder="请输入产品型号" />
+        </el-form-item>
       </el-col>
     </el-row>
     <el-divider class="cpq-divider"></el-divider>

@@ -50,3 +50,34 @@ export function listCatalogTree() {
     method: 'get'
   })
 }
+
+// 导出产品目录列表
+export function exportCatalog(query) {
+  return request({
+    url: '/cpq/catalog/export',
+    method: 'post',
+    data: query,
+    responseType: 'blob'
+  })
+}
+
+// 下载产品目录导入模板
+export function downloadCatalogImportTemplate() {
+  return request({
+    url: '/cpq/catalog/importTemplate',
+    method: 'post',
+    responseType: 'blob'
+  })
+}
+
+// 导入产品目录数据
+export function importCatalogData(data) {
+  return request({
+    url: '/cpq/catalog/importData',
+    method: 'post',
+    data: data,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}

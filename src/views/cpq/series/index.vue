@@ -31,6 +31,14 @@
             导出
           </el-button>
           <el-button
+            type="success"
+            size="default"
+            icon="Upload"
+            @click="handleImport"
+          >
+            导入
+          </el-button>
+          <el-button
             type="info"
             size="default"
             icon="Search"
@@ -108,11 +116,11 @@
 
     <!-- 表格区域 -->
     <div class="table-container">
-      <el-table v-loading="loading" :data="seriesList" @selection-change="handleSelectionChange" border style="width: 100%">
+      <el-table v-loading="loading" :data="seriesList" @selection-change="handleSelectionChange" border style="width: 100%;">
         <el-table-column type="selection" width="50" align="center" />
-        <el-table-column label="系列编码" align="center" prop="seriesCode" width="110" />
-        <el-table-column label="系列名称" align="center" prop="seriesName" width="140" :show-overflow-tooltip="true" />
-        <el-table-column label="所属品牌" align="center" prop="brandName" width="110" />
+        <el-table-column label="系列编码" align="center" prop="seriesCode" min-width="110" />
+        <el-table-column label="系列名称" align="center" prop="seriesName" min-width="140" :show-overflow-tooltip="true" />
+        <el-table-column label="所属品牌" align="center" prop="brandName" min-width="110" />
         <el-table-column label="系列状态" align="center" prop="status" width="90">
           <template #default="scope">
             <el-tag :type="scope.row.status === '0' ? 'success' : 'danger'" size="small">
@@ -121,8 +129,8 @@
           </template>
         </el-table-column>
         <el-table-column label="排序" align="center" prop="sortOrder" width="70" />
-        <el-table-column label="创建时间" align="center" prop="createTime" width="150" />
-        <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="150">
+        <el-table-column label="创建时间" align="center" prop="createTime" min-width="150" />
+        <el-table-column label="操作" align="center" class-name="small-padding fixed-width" min-width="150">
           <template #default="scope">
             <el-button
               size="small"
@@ -150,8 +158,8 @@
         <pagination
           v-show="total > 0"
           :total="total"
-          :page.sync="queryParams.pageNum"
-          :limit.sync="queryParams.pageSize"
+          v-model:page="queryParams.pageNum"
+          v-model:limit="queryParams.pageSize"
           @pagination="getList"
         />
       </div>
@@ -209,16 +217,59 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 导入系列对话框 -->
+    <el-dialog
+      :title="upload.title"
+      v-model="upload.open"
+      width="400px"
+      append-to-body
+    >
+      <el-upload
+        ref="uploadRef"
+        :limit="1"
+        accept=".xlsx, .xls"
+        :headers="upload.headers"
+        :action="upload.url + '?updateSupport=' + upload.updateSupport"
+        :disabled="upload.isUploading"
+        :on-progress="handleFileUploadProgress"
+        :on-success="handleFileSuccess"
+        :on-change="handleFileChange"
+        :on-remove="handleFileRemove"
+        :auto-upload="false"
+        drag
+      >
+        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <template #tip>
+          <div class="el-upload__tip text-center">
+            <div class="el-upload__tip">
+              <el-checkbox v-model="upload.updateSupport" />是否更新已经存在的系列数据
+            </div>
+            <span>仅允许导入xls、xlsx格式文件。</span>
+            <el-link type="primary" :underline="false" style="font-size: 12px; vertical-align: baseline" @click="importTemplate">下载模板</el-link>
+          </div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" :loading="upload.isUploading" @click="submitFileForm">确 定</el-button>
+          <el-button @click="upload.open = false">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .series-management {
   height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 15px;
+  box-sizing: border-box;
 }
 
 .search-form .search-buttons {
@@ -489,11 +540,13 @@
 </style>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, getCurrentInstance } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
 import { listSeries, getSeries, addSeries, updateSeries, delSeries, listBrand, exportSeries } from '@/api/cpq/series'
 import { listCatalog } from '@/api/cpq/catalog'
 
+const { proxy } = getCurrentInstance()
 const loading = ref(true)
 const showSearch = ref(true)
 const total = ref(0)
@@ -505,6 +558,29 @@ const multipleSelection = ref([])
 const title = ref('')
 const open = ref(false)
 const formRef = ref()
+
+// 上传相关
+const upload = reactive({
+  // 上传参数
+  open: false,
+  title: '导入系列',
+  url: import.meta.env.VITE_APP_BASE_API + '/cpq/series/import',
+  headers: {
+    Authorization: 'Bearer ' + localStorage.getItem('token')
+  },
+  isUploading: false,
+  isUpdateSupport: 0,
+  updateSupport: 0,
+  fileList: [],
+  successMsg: ''
+})
+
+const uploadRef = ref()
+
+// 导入模板
+const importTemplate = () => {
+  proxy.download("cpq/series/importTemplate", {}, `series_import_template_${new Date().getTime()}.xlsx`)
+}
 
 const form = reactive({
   seriesId: null,
@@ -555,14 +631,31 @@ const getList = async () => {
 const getTreeselect = async () => {
   try {
     const res = await listCatalog()
+    console.log('listCatalog API返回数据:', res)
     // 确保有返回数据再进行处理
-    if (res && (res.rows || Array.isArray(res))) {
-      const data = res.rows || res
-      // 转换为树形结构，用于树形选择器
-      treeSelectData.value = convertToTree(data)
+    let data = []
+    if (res && res.data && Array.isArray(res.data)) {
+      // { code: 200, data: [...] } 格式
+      data = res.data
+    } else if (res && res.rows) {
+      // 分页格式的响应 { rows: [...], total: ... }
+      data = res.rows
+    } else if (Array.isArray(res)) {
+      // 直接返回数组的情况
+      data = res
+    } else if (res && res.data && typeof res.data === 'object') {
+      // { data: { rows: [...], total: ... } } 格式
+      data = res.data.rows || []
     } else {
-      treeSelectData.value = []
+      // 其他格式，尝试获取数据
+      data = res || []
     }
+    console.log('处理后的目录数据:', data)
+    // 转换为树形结构，用于树形选择器
+    const treeData = convertToTree(data)
+    console.log('转换后的树形结构:', treeData)
+    treeSelectData.value = treeData
+    console.log('最终目录树数据:', treeSelectData.value)
   } catch (error) {
     console.error('获取目录树失败:', error)
     treeSelectData.value = []
@@ -575,27 +668,48 @@ const convertToTree = (data) => {
   const tree = []
   const map = {}
   
-  // 构建目录ID到目录对象的映射
-  data.forEach(item => {
-    map[item.catalogId] = { ...item, children: [] }
+  // 确保data是数组
+  const dataArray = Array.isArray(data) ? data : []
+  
+  // 构建目录ID到目录对象的映射，并将catalogId转换为字符串类型
+  dataArray.forEach(item => {
+    // 支持多种字段名
+    const catalogId = String(item.catalogId || item.id || item.CatalogId)
+    const parentId = String(item.parentId || item.parent_id || item.ParentId || 0)
+    const catalogName = item.catalogName || item.name || item.CatalogName || '未命名目录'
+    
+    map[catalogId] = { 
+      ...item, 
+      catalogId, // 转换为字符串类型
+      parentId, // 转换为字符串类型
+      catalogName, // 确保有名称
+      children: [] 
+    }
   })
   
   // 构建树形结构
-  data.forEach(item => {
-    const parentId = item.parentId || 0
-    if (parentId === 0) {
-      // 根节点
-      tree.push(map[item.catalogId])
-    } else if (map[parentId]) {
-      // 子节点
-      map[parentId].children.push(map[item.catalogId])
+  dataArray.forEach(item => {
+    const catalogId = String(item.catalogId || item.id || item.CatalogId)
+    const parentId = String(item.parentId || item.parent_id || item.ParentId || 0)
+    
+    if (map[catalogId]) {
+      if (parentId === '0' || !parentId) {
+        // 根节点
+        tree.push(map[catalogId])
+      } else if (map[parentId]) {
+        // 子节点
+        map[parentId].children.push(map[catalogId])
+      } else {
+        // 找不到父节点，作为根节点处理
+        tree.push(map[catalogId])
+      }
     }
   })
   
   // 根据排序字段对每个节点的子节点进行排序
   const sortChildren = (node) => {
     if (node.children && node.children.length > 0) {
-      node.children.sort((a, b) => (a.catalogSort || 0) - (b.catalogSort || 0))
+      node.children.sort((a, b) => (a.catalogSort || a.sortOrder || 0) - (b.catalogSort || b.sortOrder || 0))
       node.children.forEach(child => sortChildren(child))
     }
   }
@@ -608,10 +722,36 @@ const convertToTree = (data) => {
 const getBrandList = async () => {
   try {
     const res = await listBrand()
-    // 处理API返回的标准响应格式
-    const brandData = res.code === 200 ? res.data : []
-    brandList.value = Array.isArray(brandData) ? brandData : []
+    console.log('listBrand API返回数据:', res)
+    // 处理API返回的响应格式，支持多种格式
+    let brandData = []
+    if (res && res.data && Array.isArray(res.data)) {
+      // { code: 200, data: [...] } 格式
+      brandData = res.data
+    } else if (res && res.rows) {
+      // 分页格式 { rows: [...], total: ... }
+      brandData = res.rows
+    } else if (Array.isArray(res)) {
+      // 直接返回数组
+      brandData = res
+    } else {
+      // 其他格式，直接使用
+      brandData = res
+    }
+    console.log('处理后的品牌数据:', brandData)
+    // 将品牌列表中的brandId转换为字符串类型，确保与select的value类型一致
+    brandList.value = Array.isArray(brandData) ? brandData.map(brand => {
+      const processedBrand = {
+        ...brand,
+        brandId: String(brand.brandId || brand.id || ''), // 转换为字符串类型，支持brandId和id两种字段名
+        brandName: brand.brandName || brand.name || '未命名品牌' // 确保有名称
+      }
+      console.log('转换后的品牌数据项:', processedBrand)
+      return processedBrand
+    }) : []
+    console.log('最终品牌列表:', brandList.value)
   } catch (error) {
+    console.error('获取品牌列表失败:', error)
     brandList.value = []
     ElMessage.error('获取品牌列表失败')
   }
@@ -659,22 +799,43 @@ const handleAdd = async () => {
 }
 
 const handleUpdate = async (row) => {
+  console.log('=== 开始处理修改系列 ===')
+  console.log('传入的row数据:', row)
+  
   form.seriesId = row.seriesId
   form.seriesCode = row.seriesCode
   form.seriesName = row.seriesName
-  form.brandId = row.brandId
-  form.catalogId = row.catalogId
+  
+  // 转换为字符串类型，确保与option的value类型一致，正确显示label
+  console.log('原始row.brandId:', row.brandId, '类型:', typeof row.brandId)
+  form.brandId = String(row.brandId || '')
+  console.log('设置form.brandId:', form.brandId, '类型:', typeof form.brandId)
+  
+  console.log('原始row.catalogId:', row.catalogId, '类型:', typeof row.catalogId)
+  form.catalogId = String(row.catalogId || '')
+  console.log('设置form.catalogId:', form.catalogId, '类型:', typeof form.catalogId)
+  
   form.status = row.status
   form.sortOrder = row.sortOrder
   
+  console.log('当前brandList:', brandList.value)
+  console.log('当前treeSelectData:', treeSelectData.value)
+  
+  // 检查品牌是否存在
+  const foundBrand = brandList.value.find(brand => brand.brandId === form.brandId)
+  console.log('找到的品牌:', foundBrand)
+  
   // 确保产品目录数据已加载
   if (treeSelectData.value.length === 0) {
-    console.log('目录数据为空，重新加载目录数据...')
+    console.log('目录数据为空，重新加载...')
     await getTreeselect()
+    console.log('重新加载后的treeSelectData:', treeSelectData.value)
   }
   
+  console.log('打开弹窗前的form数据:', form)
   title.value = '修改系列'
   open.value = true
+  console.log('=== 处理修改系列结束 ===')
 }
 
 const handleDelete = async (row) => {
@@ -715,21 +876,54 @@ const handleDeleteAll = async () => {
 }
 
 const handleExport = () => {
-  // 调用导出API
-  exportSeries(queryParams).then(response => {
-    // 创建下载链接并下载文件
-    const blob = new Blob([response], { type: 'application/vnd.ms-excel' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = '系列列表.xlsx'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(link.href)
-    ElMessage.success('导出成功')
-  }).catch(error => {
-    ElMessage.error('导出失败')
-  })
+  const { proxy } = getCurrentInstance()
+  proxy.download("cpq/series/export", {
+    ...queryParams
+  }, `series_${new Date().getTime()}.xlsx`)
+}
+
+// 打开导入对话框
+const handleImport = () => {
+  upload.title = '导入系列'
+  upload.open = true
+}
+
+// 提交上传文件
+const submitFileForm = () => {
+  if (uploadRef.value && uploadRef.value.uploadFiles.length > 0) {
+    uploadRef.value.submit()
+  } else {
+    ElMessage.warning('请选择要上传的文件')
+  }
+}
+
+// 文件上传中处理
+const handleFileUploadProgress = (event, file, fileList) => {
+  upload.isUploading = true
+}
+
+// 文件上传成功处理
+const handleFileSuccess = (response, file, fileList) => {
+  upload.isUploading = false
+  if (response.code === 200) {
+    upload.successMsg = response.msg
+    ElMessage.success(response.msg)
+    upload.open = false
+    // 重新获取列表数据
+    getList()
+  } else {
+    ElMessage.error(response.msg)
+  }
+}
+
+// 文件选择变化处理
+const handleFileChange = (file, fileList) => {
+  upload.updateSupport = fileList.length > 0
+}
+
+// 文件移除处理
+const handleFileRemove = (file, fileList) => {
+  upload.updateSupport = fileList.length > 0
 }
 
 const submitForm = async () => {

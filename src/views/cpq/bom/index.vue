@@ -84,65 +84,90 @@
       </el-col>
     </el-row>
 
-    <el-table v-loading="loading" :data="superBomList" @selection-change="handleSelectionChange">
-      <el-table-column type="selection" width="55" align="center" />
-      <el-table-column label="BOM编码" align="center" prop="bomCode" />
-      <el-table-column label="BOM名称" align="center" prop="bomName" :show-overflow-tooltip="true" />
-      <el-table-column label="BOM类型" align="center" prop="bomType">
-        <template #default="scope">
-          <el-tag :type="scope.row.bomType === 'template' ? 'primary' : 
-                     scope.row.bomType === 'instance' ? 'success' : 'warning'" size="small">
-            {{ scope.row.bomType === 'template' ? '模板' : 
-               scope.row.bomType === 'instance' ? '实例' : '版本' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="验证策略" align="center" prop="validationStrategy">
-        <template #default="scope">
-          <el-tag :type="scope.row.validationStrategy === 'strict' ? 'danger' : 
-                     scope.row.validationStrategy === 'warning' ? 'warning' : 'success'" size="small">
-            {{ scope.row.validationStrategy === 'strict' ? '严格验证' : 
-               scope.row.validationStrategy === 'warning' ? '警告验证' : '无验证' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="规则引擎" align="center" prop="ruleEngineType" />
-      <el-table-column label="创建时间" align="center" prop="createTime" width="180" />
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="200">
-        <template #default="scope">
-          <el-button
-            size="small"
-            type="primary"
-            icon="Edit"
-            @click="handleUpdate(scope.row)"
-          >
-            修改
-          </el-button>
-          <el-button
-            size="small"
-            type="danger"
-            icon="Delete"
-            @click="handleDelete(scope.row)"
-          >
-            删除
-          </el-button>
-          <el-button
-            size="small"
-            type="info"
-            icon="SetUp"
-            @click="handleBomManage(scope.row)"
-          >
-            BOM管理
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div v-loading="loading" class="bom-card-container">
+      <el-row :gutter="20">
+        <el-col :xs="24" :sm="12" :md="12" :lg="8" :xl="6" v-for="(item, index) in superBomList" :key="item.bomId">
+          <el-card shadow="hover" class="bom-card">
+            <template #header>
+              <div class="bom-card-header">
+                <div class="bom-card-title">
+                  <h3>{{ item.bomName }}</h3>
+                  <el-checkbox v-model="selectedBomIds[item.bomId]" @change="handleBomSelect(item)"></el-checkbox>
+                </div>
+                <div class="bom-card-type">
+                  <el-tag :type="item.bomType === 'template' ? 'primary' : 
+                             item.bomType === 'instance' ? 'success' : 'warning'" size="small">
+                    {{ item.bomType === 'template' ? '模板' : 
+                       item.bomType === 'instance' ? '实例' : '版本' }}
+                  </el-tag>
+                </div>
+              </div>
+            </template>
+            
+            <div class="bom-card-content">
+              <div class="bom-info-item">
+                <div class="info-label">BOM编码:</div>
+                <div class="info-value">{{ item.bomCode }}</div>
+              </div>
+              
+              <div class="bom-info-item">
+                <div class="info-label">验证策略:</div>
+                <div class="info-value">
+                  <el-tag :type="item.validationStrategy === 'strict' ? 'danger' : 
+                             item.validationStrategy === 'warning' ? 'warning' : 'success'" size="small">
+                    {{ item.validationStrategy === 'strict' ? '严格验证' : 
+                       item.validationStrategy === 'warning' ? '警告验证' : '无验证' }}
+                  </el-tag>
+                </div>
+              </div>
+              
+              <div class="bom-info-item">
+                <div class="info-label">规则引擎:</div>
+                <div class="info-value">{{ item.ruleEngineType }}</div>
+              </div>
+              
+              <div class="bom-info-item">
+                <div class="info-label">创建时间:</div>
+                <div class="info-value">{{ item.createTime }}</div>
+              </div>
+            </div>
+            
+            <div class="bom-card-actions">
+              <el-button
+                size="small"
+                type="primary"
+                icon="Edit"
+                @click="handleUpdate(item)"
+              >
+                修改
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                icon="Delete"
+                @click="handleDelete(item)"
+              >
+                删除
+              </el-button>
+              <el-button
+                size="small"
+                type="info"
+                icon="SetUp"
+                @click="handleBomManage(item)"
+              >
+                BOM管理
+              </el-button>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
 
     <pagination
       v-show="total > 0"
       :total="total"
-      :page.sync="queryParams.pageNum"
-      :limit.sync="queryParams.pageSize"
+      v-model:page="queryParams.pageNum"
+      v-model:limit="queryParams.pageSize"
       @pagination="getList"
     />
 
@@ -201,6 +226,7 @@ const showSearch = ref(true)
 const total = ref(0)
 const superBomList = ref([])
 const multipleSelection = ref([])
+const selectedBomIds = ref({})
 const title = ref('')
 const open = ref(false)
 const formRef = ref(null)
@@ -263,7 +289,21 @@ const toggleSearch = () => {
   showSearch.value = !showSearch.value
 }
 
+const handleBomSelect = (item) => {
+  if (selectedBomIds.value[item.bomId]) {
+    // 添加到选择列表
+    multipleSelection.value.push(item)
+  } else {
+    // 从选择列表中移除
+    const index = multipleSelection.value.findIndex(bom => bom.bomId === item.bomId)
+    if (index > -1) {
+      multipleSelection.value.splice(index, 1)
+    }
+  }
+}
+
 const handleSelectionChange = (selection) => {
+  // 保持原有函数签名，确保兼容性
   multipleSelection.value = selection
 }
 
@@ -353,3 +393,139 @@ onMounted(() => {
   getList()
 })
 </script>
+
+<style scoped>
+/* BOM卡片容器样式 */
+.bom-card-container {
+  padding: 20px 0;
+}
+
+/* BOM卡片样式 */
+.bom-card {
+  margin-bottom: 20px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.bom-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 卡片头部样式 */
+.bom-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.bom-card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.bom-card-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.bom-card-type {
+  margin-top: 5px;
+}
+
+/* 卡片内容样式 */
+.bom-card-content {
+  padding: 15px 0;
+  flex: 1;
+}
+
+.bom-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bom-info-item:last-child {
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 13px;
+  color: #909399;
+  font-weight: 500;
+  width: 80px;
+  text-align: left;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #303133;
+  flex: 1;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 卡片操作按钮样式 */
+.bom-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.bom-card-actions .el-button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* 搜索卡片样式 */
+.search-card {
+  margin-bottom: 20px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .bom-info-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .info-label,
+  .info-value {
+    text-align: left;
+    width: 100%;
+  }
+  
+  .info-value {
+    margin-top: 5px;
+  }
+  
+  .bom-card-actions {
+    flex-direction: column;
+  }
+  
+  .bom-card-actions .el-button {
+    width: 100%;
+  }
+}
+</style>

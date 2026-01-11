@@ -109,9 +109,9 @@
                       </el-form-item>
                     </el-col>
                   </el-row>
-                  <el-form-item label="规则表达式">
+                  <!-- <el-form-item label="规则表达式">
                     <el-input v-model="selectedRule.ruleExpression" type="textarea" :rows="4" readonly />
-                  </el-form-item>
+                  </el-form-item> -->
                   <el-form-item label="描述">
                     <el-input v-model="selectedRule.description" type="textarea" :rows="3" placeholder="规则描述" />
                   </el-form-item>
@@ -138,6 +138,7 @@
                 v-model="selectedRule.actions"
                 :rule-type="selectedRule.ruleType"
                 :rule-id="selectedRule?.ruleId"
+                :bom-id="props.bomId"
                 @update:actions="updateRuleExpression"
               />
             </el-tab-pane>
@@ -146,6 +147,7 @@
               <rule-advanced-config
                 v-model="selectedRule.advancedConfig"
                 :rule-type="selectedRule.ruleType"
+                :rule-id="selectedRule?.ruleId"
               />
             </el-tab-pane>
             
@@ -522,8 +524,16 @@ const handleSaveRule = async () => {
   try {
     if (!selectedRule.value) return
     
-    // 1. 首先更新规则本身
-    await updateBomRule(selectedRule.value)
+    // 1. 首先更新规则本身 - 只传递后端需要的字段
+    const ruleData = {
+      ruleId: selectedRule.value.ruleId,
+      ruleName: selectedRule.value.ruleName,
+      ruleCode: selectedRule.value.ruleCode,
+      ruleType: selectedRule.value.ruleType,
+      status: selectedRule.value.status === 'enabled' ? 0 : 1,
+      // 只传递规则相关的核心字段，不包含关联关系字段
+    }
+    await updateBomRule(ruleData)
     
     // 2. 然后更新关联关系
     if (selectedRule.value.relationId) {

@@ -149,4 +149,66 @@ export function autoIntegrateCatalogAttributes(productId) {
   })
 }
 
+// 导出产品主数据列表
+export function exportProduct(query) {
+  return request({
+    url: '/cpq/product/export',
+    method: 'post',
+    data: query,
+    responseType: 'blob'
+  })
+}
+
+// 下载产品主数据导入模板
+export function downloadProductImportTemplate() {
+  return request({
+    url: '/cpq/product/importTemplate',
+    method: 'post',
+    responseType: 'blob'
+  })
+}
+
+// 导入产品主数据
+export function importProductData(data) {
+  return request({
+    url: '/cpq/product/importData',
+    method: 'post',
+    data: data,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+// 导出产品属性列表
+export function exportAttribute(query) {
+  return request({
+    url: '/cpq/attribute/export',
+    method: 'post',
+    data: query,
+    responseType: 'blob'
+  })
+}
+
+// 下载产品属性导入模板
+export function downloadAttributeImportTemplate() {
+  return request({
+    url: '/cpq/attribute/importTemplate',
+    method: 'post',
+    responseType: 'blob'
+  })
+}
+
+// 导入产品属性数据
+export function importAttributeData(data) {
+  return request({
+    url: '/cpq/attribute/importData',
+    method: 'post',
+    data: data,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
 

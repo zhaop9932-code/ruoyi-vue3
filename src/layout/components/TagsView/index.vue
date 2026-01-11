@@ -224,8 +224,8 @@ function toLastView(visitedViews, view) {
     // now the default is to redirect to the home page if there is no tags-view,
     // you can adjust it according to your needs.
     if (view.name === 'Dashboard') {
-      // to reload home page
-      router.replace({ path: '/redirect' + view.fullPath })
+      // to reload home page - directly go to the path instead of using redirect
+      router.replace({ path: view.fullPath })
     } else {
       router.push('/')
     }

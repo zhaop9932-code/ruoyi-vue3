@@ -4,6 +4,10 @@
       <template #header>
         <div class="card-header">
           <span>高级配置</span>
+          <div class="header-actions">
+            <el-button @click="cancel">取消</el-button>
+            <el-button type="primary" @click="save">保存</el-button>
+          </div>
         </div>
       </template>
       
@@ -175,7 +179,12 @@
 </template>
 
 <script setup>
-import { ref, watch, reactive } from 'vue'
+import { ref, watch, reactive, computed, onMounted } from 'vue'
+import { ElMessage, ElLoading } from 'element-plus'
+import { useRouter } from 'vue-router'
+
+// 导入API请求函数
+import { getRuleAdvancedConfig, saveRuleAdvancedConfig, getAvailableRules } from '@/api/cpq/rule'
 
 const props = defineProps({
   modelValue: {
@@ -185,13 +194,21 @@ const props = defineProps({
   ruleType: {
     type: String,
     default: 'validation'
+  },
+  ruleId: {
+    type: [String, Number],
+    required: true
   }
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'save-success'])
 
-// 高级配置数据
-const advancedConfig = reactive({
+// 加载状态
+const loading = ref(false)
+const rulesLoading = ref(false)
+
+// 高级配置数据 - 使用ref和localCopy来实现手动保存
+const localConfig = ref({
   triggerTiming: [],
   priority: 5,
   validityPeriod: [],
@@ -205,25 +222,191 @@ const advancedConfig = reactive({
   ...props.modelValue
 })
 
-// 可用规则列表（模拟数据）
-const availableRules = ref([
-  { ruleId: 1, ruleName: '重量验证规则' },
-  { ruleId: 2, ruleName: '总价计算规则' },
-  { ruleId: 3, ruleName: '颜色折扣规则' },
-  { ruleId: 4, ruleName: '库存验证规则' }
-])
+// 计算属性：用于双向绑定
+const advancedConfig = computed({
+  get: () => localConfig.value,
+  set: (value) => {
+    localConfig.value = value
+  }
+})
 
-// 监听配置变化
-watch(advancedConfig, () => {
-  emit('update:modelValue', advancedConfig)
-}, { deep: true })
+// 可用规则列表
+const availableRules = ref([])
+
+// 获取可用规则列表
+const fetchAvailableRules = async () => {
+  rulesLoading.value = true
+  try {
+    const response = await getAvailableRules({ ruleType: props.ruleType })
+    if (response.code === 200) {
+      availableRules.value = response.data
+    } else {
+      ElMessage.error(response.message || '获取可用规则列表失败')
+    }
+  } catch (error) {
+    console.error('获取可用规则列表失败:', error)
+    ElMessage.error('获取可用规则列表失败')
+  } finally {
+    rulesLoading.value = false
+  }
+}
+
+// 获取高级配置
+const fetchAdvancedConfig = async () => {
+  // 有效性检查：确保ruleId是有效的数字
+  let ruleId = props.ruleId
+  
+  // 处理空字符串、null等边缘情况
+  if (!ruleId && ruleId !== 0) {
+    console.warn('无效的ruleId，无法获取高级配置:', props.ruleId)
+    return
+  }
+  
+  // 转换为数字类型
+  ruleId = Number(ruleId)
+  
+  // 检查是否为有效的数字
+  if (isNaN(ruleId) || ruleId <= 0) {
+    console.warn('无效的ruleId，无法获取高级配置:', props.ruleId)
+    return
+  }
+  
+  loading.value = true
+  try {
+    const response = await getRuleAdvancedConfig(ruleId)
+    if (response.code === 200) {
+      localConfig.value = {
+        triggerTiming: [],
+        priority: 5,
+        validityPeriod: [],
+        executionLimit: 0,
+        executionInterval: 0,
+        dependencies: [],
+        ruleGroup: '',
+        executionMode: 'sync',
+        errorHandling: 'continue',
+        remark: '',
+        ...response.data
+      }
+    } else {
+      ElMessage.error(response.message || '获取高级配置失败')
+    }
+  } catch (error) {
+    console.error('获取高级配置失败:', error)
+    ElMessage.error('获取高级配置失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 保存配置
+const save = async () => {
+  // 有效性检查：确保ruleId是有效的数字
+  let ruleId = props.ruleId
+  console.log('ruleId:', ruleId)
+  console.log('ruleId:', props)
+  // 处理空字符串、null等边缘情况
+  if (!ruleId && ruleId !== 0) {
+    console.error('无效的ruleId，无法保存高级配置:', props.ruleId)
+    ElMessage.error('无效的规则ID，无法保存高级配置')
+    return
+  }
+  
+  // 转换为数字类型
+  ruleId = Number(ruleId)
+  
+  // 检查是否为有效的数字
+  if (isNaN(ruleId) || ruleId <= 0) {
+    console.error('无效的ruleId，无法保存高级配置:', props.ruleId)
+    ElMessage.error('无效的规则ID，无法保存高级配置')
+    return
+  }
+  
+  loading.value = true
+  try {
+    // 过滤掉不必要的字段，只保留接口需要的字段
+    const configToSave = {
+      triggerTiming: localConfig.value.triggerTiming,
+      priority: localConfig.value.priority,
+      validityPeriod: localConfig.value.validityPeriod,
+      executionLimit: localConfig.value.executionLimit,
+      executionInterval: localConfig.value.executionInterval,
+      dependencies: localConfig.value.dependencies,
+      ruleGroup: localConfig.value.ruleGroup,
+      executionMode: localConfig.value.executionMode,
+      errorHandling: localConfig.value.errorHandling,
+      remark: localConfig.value.remark
+    }
+    
+    const response = await saveRuleAdvancedConfig(ruleId, configToSave)
+    if (response.code === 200) {
+      emit('update:modelValue', localConfig.value)
+      emit('save-success')
+      ElMessage.success('保存成功')
+    } else {
+      ElMessage.error(response.message || '保存失败')
+    }
+  } catch (error) {
+    console.error('保存高级配置失败:', error)
+    ElMessage.error('保存失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 取消修改，恢复到初始值
+const cancel = () => {
+  localConfig.value = {
+    triggerTiming: [],
+    priority: 5,
+    validityPeriod: [],
+    executionLimit: 0,
+    executionInterval: 0,
+    dependencies: [],
+    ruleGroup: '',
+    executionMode: 'sync',
+    errorHandling: 'continue',
+    remark: '',
+    ...props.modelValue
+  }
+  ElMessage.info('已取消修改')
+}
 
 // 监听外部模型变化
 watch(() => props.modelValue, (newVal) => {
-  if (newVal && JSON.stringify(newVal) !== JSON.stringify(advancedConfig)) {
-    Object.assign(advancedConfig, newVal)
+  if (newVal && JSON.stringify(newVal) !== JSON.stringify(localConfig.value)) {
+    localConfig.value = {
+      triggerTiming: [],
+      priority: 5,
+      validityPeriod: [],
+      executionLimit: 0,
+      executionInterval: 0,
+      dependencies: [],
+      ruleGroup: '',
+      executionMode: 'sync',
+      errorHandling: 'continue',
+      remark: '',
+      ...newVal
+    }
   }
 }, { deep: true })
+
+// 监听ruleId变化，重新获取高级配置
+watch(() => props.ruleId, (newRuleId) => {
+  if (newRuleId) {
+    fetchAdvancedConfig()
+  }
+}, { immediate: true })
+
+// 监听ruleType变化，重新获取可用规则列表
+watch(() => props.ruleType, (newType) => {
+  fetchAvailableRules()
+}, { immediate: true })
+
+// 组件挂载时获取数据
+onMounted(() => {
+  fetchAvailableRules()
+})
 </script>
 
 <style scoped>
@@ -237,6 +420,11 @@ watch(() => props.modelValue, (newVal) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .form-tip {

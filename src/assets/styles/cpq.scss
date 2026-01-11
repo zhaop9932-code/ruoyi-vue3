@@ -46,6 +46,9 @@ $cpq-text-placeholder: #c0c4cc;
   padding: 20px;
   margin-bottom: 20px;
   transition: all 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 
   &:hover {
     box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
@@ -110,9 +113,12 @@ $cpq-text-placeholder: #c0c4cc;
   border-radius: 8px;
   box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  width: 100%;
+  display: block;
 
   .el-table {
     border: none;
+    width: 100%;
 
     &__header-wrapper {
       background-color: $cpq-bg;
@@ -353,6 +359,23 @@ $cpq-text-placeholder: #c0c4cc;
 
   .el-button {
     margin: 0;
+  }
+}
+
+// 系列管理表格容器样式
+.table-container {
+  width: 100%;
+  flex: 1;
+  border: 1px solid $cpq-border;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: $cpq-bg-light;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
+
+  .el-table {
+    width: 100%;
+    border: none;
+    flex: 1;
   }
 }
 

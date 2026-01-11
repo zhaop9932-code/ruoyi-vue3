@@ -54,3 +54,29 @@ export function addConfigurationRuleWithBom(data) {
     data: data
   })
 }
+
+// 获取规则高级配置
+export function getRuleAdvancedConfig(ruleId) {
+  return request({
+    url: `/cpq/rule/advanced-config/${ruleId}`,
+    method: 'get'
+  })
+}
+
+// 保存规则高级配置
+export function saveRuleAdvancedConfig(ruleId, data) {
+  return request({
+    url: `/cpq/rule/advanced-config/${ruleId}`,
+    method: 'post',
+    data: data
+  })
+}
+
+// 获取可用规则列表
+export function getAvailableRules(params) {
+  return request({
+    url: '/cpq/rule/advanced-config/available-rules',
+    method: 'get',
+    params: params
+  })
+}

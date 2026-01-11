@@ -55,13 +55,6 @@ export function listBomStructure(query) {
   })
 }
 
-export function getBomStructure(structureId) {
-  return request({
-    url: `/cpq/bomStructure/${structureId}`,
-    method: 'get'
-  })
-}
-
 export function addBomStructure(data) {
   return request({
     url: '/cpq/bomStructure',
@@ -275,5 +268,122 @@ export function deleteSuperBomStructureAttributeValue(ids) {
   return request({
     url: `/cpq/superBomStructureAttributeValue/${ids}`,
     method: 'delete'
+  })
+}
+
+// 超级BOM默认产品配置
+
+export function listSuperBomDefaultProduct(query) {
+  return request({
+    url: '/cpq/superBomDefaultProduct/list',
+    method: 'get',
+    params: query
+  })
+}
+
+export function getSuperBomDefaultProduct(id) {
+  return request({
+    url: `/cpq/superBomDefaultProduct/${id}`,
+    method: 'get'
+  })
+}
+
+export function addSuperBomDefaultProduct(data) {
+  return request({
+    url: '/cpq/superBomDefaultProduct',
+    method: 'post',
+    data: data
+  })
+}
+
+export function updateSuperBomDefaultProduct(data) {
+  return request({
+    url: '/cpq/superBomDefaultProduct',
+    method: 'put',
+    data: data
+  })
+}
+
+export function deleteSuperBomDefaultProduct(ids) {
+  return request({
+    url: `/cpq/superBomDefaultProduct/${ids}`,
+    method: 'delete'
+  })
+}
+
+export function getDefaultProductsByBomId(bomId) {
+  return request({
+    url: `/cpq/superBomDefaultProduct/byBomId/${bomId}`,
+    method: 'get'
+  })
+}
+
+export function applyDefaultProducts(bomId) {
+  return request({
+    url: `/cpq/superBomDefaultProduct/apply/${bomId}`,
+    method: 'post'
+  })
+}
+
+// 超级BOM解决方案关联
+
+export function listSuperBomSolutionRelation(query) {
+  return request({
+    url: '/cpq/superBomSolutionRelation/list',
+    method: 'get',
+    params: query
+  })
+}
+
+export function getSuperBomSolutionRelation(relationId) {
+  return request({
+    url: `/cpq/superBomSolutionRelation/${relationId}`,
+    method: 'get'
+  })
+}
+
+export function addSuperBomSolutionRelation(data) {
+  return request({
+    url: '/cpq/superBomSolutionRelation',
+    method: 'post',
+    data: data
+  })
+}
+
+export function updateSuperBomSolutionRelation(data) {
+  return request({
+    url: '/cpq/superBomSolutionRelation',
+    method: 'put',
+    data: data
+  })
+}
+
+export function deleteSuperBomSolutionRelation(ids) {
+  return request({
+    url: `/cpq/superBomSolutionRelation/${ids}`,
+    method: 'delete'
+  })
+}
+
+export function getSolutionsByBomId(bomId) {
+  return request({
+    url: `/cpq/superBomSolutionRelation/byBomId/${bomId}`,
+    method: 'get'
+  })
+}
+
+export function addSolutionRelation(params) {
+  return request({
+    url: '/cpq/superBomSolutionRelation/addRelation',
+    method: 'post',
+    params: params
+  })
+}
+
+export function removeSolutionRelation(params) {
+  return request({
+    url: '/cpq/superBomSolutionRelation/removeRelation',
+    method: 'delete',
+    params: params
   })
 }

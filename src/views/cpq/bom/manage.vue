@@ -17,6 +17,12 @@
       <el-tab-pane label="规则配置" name="ruleConfig">
         <bom-rule-config ref="ruleConfigRef" :bom-id="bomId" />
       </el-tab-pane>
+      <el-tab-pane label="默认产品组" name="defaultProduct">
+        <bom-default-product :bom-id="bomId" />
+      </el-tab-pane>
+      <el-tab-pane label="BOM方案" name="bomSolution">
+        <bom-solution-relation :bom-id="bomId" />
+      </el-tab-pane>
       <el-tab-pane label="高级设置" name="advancedSettings">
         <bom-advanced-settings :bom-id="bomId" />
       </el-tab-pane>
@@ -33,6 +39,8 @@ import BomVariableManagement from './components/BomVariableManagement.vue'
 import BomNodeInfo from './components/BomNodeInfo.vue'
 import BomRuleConfig from './components/BomRuleConfig.vue'
 import BomAdvancedSettings from './components/BomAdvancedSettings.vue'
+import BomDefaultProduct from './components/BomDefaultProduct.vue'
+import BomSolutionRelation from './components/BomSolutionRelation.vue'
 
 const route = useRoute()
 const router = useRouter()

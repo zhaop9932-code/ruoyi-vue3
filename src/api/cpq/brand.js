@@ -60,7 +60,29 @@ export function checkBrandCodeUnique(brandCode) {
 export function exportBrand(query) {
   return request({
     url: '/cpq/brand/export',
-    method: 'get',
-    params: query
+    method: 'post',
+    data: query,
+    responseType: 'blob'
+  })
+}
+
+// 下载品牌导入模板
+export function downloadBrandImportTemplate() {
+  return request({
+    url: '/cpq/brand/importTemplate',
+    method: 'post',
+    responseType: 'blob'
+  })
+}
+
+// 导入品牌数据
+export function importBrandData(data) {
+  return request({
+    url: '/cpq/brand/importData',
+    method: 'post',
+    data: data,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
   })
 }

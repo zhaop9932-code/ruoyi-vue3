@@ -5,20 +5,42 @@ export default {
   // 刷新当前tab页签
   refreshPage(obj) {
     const { path, query, matched } = router.currentRoute.value
-    if (obj === undefined) {
+    let refreshPath = path
+    let refreshQuery = query
+    
+    // 如果提供了obj，使用obj中的路径和查询参数
+    if (obj) {
+      // 检查obj是否包含fullPath（来自标签页）
+      if (obj.fullPath) {
+        // 从完整路径中提取路径和查询参数
+        const url = new URL(obj.fullPath, window.location.origin)
+        refreshPath = url.pathname
+        refreshQuery = { ...obj.query }
+      } else {
+        // 直接使用obj中的path和query
+        refreshPath = obj.path
+        refreshQuery = obj.query || query
+      }
+    } else {
+      // 没有提供obj，从当前路由中获取信息
       matched.forEach((m) => {
         if (m.components && m.components.default && m.components.default.name) {
           if (!['Layout', 'ParentView'].includes(m.components.default.name)) {
-            obj = { name: m.components.default.name, path: path, query: query }
+            obj = { name: m.components.default.name, path: refreshPath, query: refreshQuery }
           }
         }
       })
     }
-    return useTagsViewStore().delCachedView(obj).then(() => {
-      const { path, query } = obj
+    
+    // 创建用于删除缓存的obj对象
+    const cacheObj = obj || { name: '', path: refreshPath, query: refreshQuery }
+    
+    return useTagsViewStore().delCachedView(cacheObj).then(() => {
+      // 使用重定向机制实现页面刷新
+      // 先跳转到一个临时路径，再跳回原路径，确保组件重新加载
       router.replace({
-        path: '/redirect' + path,
-        query: query
+        path: '/redirect' + refreshPath,
+        query: refreshQuery
       })
     })
   },

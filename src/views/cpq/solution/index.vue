@@ -12,15 +12,10 @@
           />
         </el-form-item>
         <el-form-item label="方案状态" prop="solutionStatus">
-          <el-select
-            v-model="queryParams.solutionStatus"
-            placeholder="请选择方案状态"
-            clearable
-            size="small"
-          >
-            <el-option label="草稿" value="draft" />
-            <el-option label="已发布" value="published" />
-            <el-option label="已失效" value="expired" />
+          <el-select v-model="queryParams.status" placeholder="请选择方案状态" clearable size="small">
+            <el-option label="草稿" value="0" />
+            <el-option label="生效" value="1" />
+            <el-option label="失效" value="2" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -69,12 +64,12 @@
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="方案编码" align="center" prop="solutionCode" />
       <el-table-column label="方案名称" align="center" prop="solutionName" :show-overflow-tooltip="true" />
-      <el-table-column label="方案状态" align="center" prop="solutionStatus">
+      <el-table-column label="方案状态" align="center" prop="status">
         <template #default="scope">
-          <el-tag :type="scope.row.solutionStatus === 'draft' ? 'info' : 
-                     scope.row.solutionStatus === 'published' ? 'success' : 'danger'" size="small">
-            {{ scope.row.solutionStatus === 'draft' ? '草稿' : 
-               scope.row.solutionStatus === 'published' ? '已发布' : '已失效' }}
+          <el-tag :type="scope.row.status === '0' ? 'info' : 
+                     scope.row.status === '1' ? 'success' : 'danger'" size="small">
+            {{ scope.row.status === '0' ? '草稿' : 
+               scope.row.status === '1' ? '生效' : '失效' }}
           </el-tag>
         </template>
       </el-table-column>
@@ -114,14 +109,14 @@
     <pagination
       v-show="total > 0"
       :total="total"
-      :page.sync="queryParams.pageNum"
-      :limit.sync="queryParams.pageSize"
+      v-model:page="queryParams.pageNum"
+      v-model:limit="queryParams.pageSize"
       @pagination="getList"
     />
 
     <!-- 解决方案配置对话框 -->
     <el-dialog :title="title" v-model="open" width="700px" append-to-body>
-      <el-form ref="form" :model="form" :rules="rules" label-width="120px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
         <el-form-item label="方案编码" prop="solutionCode">
           <el-input v-model="form.solutionCode" placeholder="请输入方案编码" />
         </el-form-item>
@@ -131,11 +126,11 @@
         <el-form-item label="方案描述" prop="description">
           <el-input v-model="form.description" type="textarea" placeholder="请输入方案描述" :rows="3" />
         </el-form-item>
-        <el-form-item label="方案状态" prop="solutionStatus">
-          <el-select v-model="form.solutionStatus" placeholder="请选择方案状态">
-            <el-option label="草稿" value="draft" />
-            <el-option label="已发布" value="published" />
-            <el-option label="已失效" value="expired" />
+        <el-form-item label="方案状态" prop="status">
+          <el-select v-model="form.status" placeholder="请选择方案状态">
+            <el-option label="草稿" :value="'0'" />
+            <el-option label="生效" :value="'1'" />
+            <el-option label="失效" :value="'2'" />
           </el-select>
         </el-form-item>
         <el-form-item label="关联BOM" prop="bomId">
@@ -164,8 +159,9 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { listSolution, addSolution, updateSolution, deleteSolution } from '@/api/cpq/solution'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const loading = ref(true)
 const showSearch = ref(true)
@@ -174,12 +170,14 @@ const solutionList = ref([])
 const multipleSelection = ref([])
 const title = ref('')
 const open = ref(false)
+const router = useRouter()
+const formRef = ref(null)
 
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
   solutionName: '',
-  solutionStatus: ''
+  status: ''
 })
 
 const form = reactive({
@@ -187,15 +185,19 @@ const form = reactive({
   solutionCode: '',
   solutionName: '',
   description: '',
-  solutionStatus: 'draft',
+  status: '0',
   bomId: '',
+  customerId: null,
+  customerName: '',
+  totalAmount: 0,
+  currency: 'CNY',
   ruleIds: []
 })
 
 const rules = reactive({
   solutionCode: [{ required: true, message: '方案编码不能为空', trigger: 'blur' }],
   solutionName: [{ required: true, message: '方案名称不能为空', trigger: 'blur' }],
-  solutionStatus: [{ required: true, message: '方案状态不能为空', trigger: 'change' }]
+  status: [{ required: true, message: '方案状态不能为空', trigger: 'change' }]
 })
 
 const getList = async () => {
@@ -218,7 +220,7 @@ const handleQuery = () => {
 
 const resetQuery = () => {
   queryParams.solutionName = ''
-  queryParams.solutionStatus = ''
+  queryParams.status = ''
   handleQuery()
 }
 
@@ -235,9 +237,12 @@ const handleAdd = () => {
   form.solutionCode = ''
   form.solutionName = ''
   form.description = ''
-  form.solutionStatus = 'draft'
+  form.status = '0'
   form.bomId = ''
-  form.ruleIds = []
+  form.customerId = null
+  form.customerName = ''
+  form.totalAmount = 0
+  form.currency = 'CNY'
   title.value = '新增解决方案'
   open.value = true
 }
@@ -247,9 +252,12 @@ const handleUpdate = (row) => {
   form.solutionCode = row.solutionCode
   form.solutionName = row.solutionName
   form.description = row.description
-  form.solutionStatus = row.solutionStatus
+  form.status = row.status
   form.bomId = row.bomId
-  form.ruleIds = row.ruleIds
+  form.customerId = row.customerId
+  form.customerName = row.customerName
+  form.totalAmount = row.totalAmount
+  form.currency = row.currency
   title.value = '修改解决方案'
   open.value = true
 }
@@ -279,7 +287,8 @@ const handleComponent = (row) => {
 }
 
 const submitForm = async () => {
-  await validate(form, rules)
+  if (!formRef.value) return
+  await formRef.value.validate()
   try {
     if (form.solutionId) {
       await updateSolution(form)
@@ -291,13 +300,16 @@ const submitForm = async () => {
     open.value = false
     getList()
   } catch (error) {
+    console.error('操作失败:', error)
     ElMessage.error('操作失败')
   }
 }
 
 const cancel = () => {
   open.value = false
-  resetForm()
+  if (formRef.value) {
+    formRef.value.resetFields()
+  }
 }
 
 onMounted(() => {

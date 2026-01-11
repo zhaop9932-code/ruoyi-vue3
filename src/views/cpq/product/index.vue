@@ -17,6 +17,9 @@
       <el-button type="warning" icon="Download" @click="handleExport">
         导出
       </el-button>
+      <el-button type="success" icon="Upload" @click="handleImport">
+        导入
+      </el-button>
     </div>
     <el-button type="info" icon="Search" @click="toggleSearch">
       {{ showSearch ? '收起' : '展开' }}搜索
@@ -52,6 +55,7 @@
     <el-table-column type="selection" width="55" align="center" />
     <el-table-column label="产品编码" align="center" prop="productCode" min-width="120" />
     <el-table-column label="产品名称" align="left" prop="productName" :show-overflow-tooltip="true" min-width="200" />
+    <el-table-column label="产品型号" align="center" prop="productModel" min-width="150" />
     <el-table-column label="产品状态" align="center" prop="productStatus">
       <template #default="scope">
         <el-tag class="cpq-status-tag" :type="scope.row.productStatus === '1' ? 'success' : 'danger'" size="small">
@@ -75,7 +79,7 @@
 
   <!-- 分页组件 -->
   <div class="cpq-pagination">
-    <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize"
+    <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize"
       @pagination="getList" />
   </div>
 
@@ -135,12 +139,35 @@
     </el-dialog>
   </div>
   </div>
+
+  <!-- 导入产品主数据对话框 -->
+  <el-dialog :title="upload.title" v-model="upload.open" width="400px" append-to-body>
+    <el-upload ref="uploadRef" :limit="1" accept=".xlsx, .xls" :headers="upload.headers" :action="upload.url + '?updateSupport=' + upload.updateSupport" :disabled="upload.isUploading" :on-progress="handleFileUploadProgress" :on-success="handleFileSuccess" :on-change="handleFileChange" :on-remove="handleFileRemove" :auto-upload="false" drag>
+      <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+      <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+      <template #tip>
+        <div class="el-upload__tip text-center">
+          <div class="el-upload__tip">
+            <el-checkbox v-model="upload.updateSupport" />是否更新已经存在的产品数据
+          </div>
+          <span>仅允许导入xls、xlsx格式文件。</span>
+          <el-link type="primary" :underline="false" style="font-size: 12px; vertical-align: baseline" @click="importTemplate">下载模板</el-link>
+        </div>
+      </template>
+    </el-upload>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button type="primary" @click="submitFileForm">确 定</el-button>
+        <el-button @click="upload.open = false">取 消</el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
-import { listProduct, addProduct, updateProduct, deleteProduct, listProductAttributeRelation, batchUpdateProductAttributeRelation, autoIntegrateCatalogAttributes } from '@/api/cpq/product'
+import { listProduct, addProduct, updateProduct, deleteProduct, listProductAttributeRelation, batchUpdateProductAttributeRelation, autoIntegrateCatalogAttributes, exportProduct } from '@/api/cpq/product'
 import { getAllBrand } from '@/api/cpq/brand'
 import { getAllSeries, getSeriesByBrand } from '@/api/cpq/series'
 import { listCatalog } from '@/api/cpq/catalog'
@@ -148,7 +175,9 @@ import { listAttributeGroupByCatalog } from '@/api/cpq/attributeGroup'
 import { listAttributeGroupAttributes } from '@/api/cpq/attributeGroupAttribute'
 import { getAttributeGroupAttributeValueByAttributeGroupAttributeId } from '@/api/cpq/attributeGroupAttributeValue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close } from '@element-plus/icons-vue'
+import { Close, UploadFilled } from '@element-plus/icons-vue'
+import { getToken } from '@/utils/auth'
+import useUserStore from '@/store/modules/user'
 
 // 引入组件
 import ProductMainInfo from './components/ProductMainInfo.vue'
@@ -159,6 +188,7 @@ import ProductParamsInfo from './components/ProductParamsInfo.vue'
 import ProductAttributesInfo from './components/ProductAttributesInfo.vue'
 
 const router = useRouter()
+const { proxy } = getCurrentInstance()
 
 const loading = ref(true)
 const showSearch = ref(true)
@@ -168,6 +198,24 @@ const multiple = ref([])
 const title = ref('')
 const open = ref(false)
 const activeTab = ref('main')
+
+// 导入相关
+const upload = reactive({
+  // 是否显示弹出层（用户导入）
+  open: false,
+  // 弹出层标题（用户导入）
+  title: "",
+  // 是否禁用上传
+  isUploading: false,
+  // 是否更新已经存在的用户数据
+  updateSupport: 0,
+  // 设置上传的请求头部
+  headers: { Authorization: "Bearer " + getToken() },
+  // 上传的地址
+  url: import.meta.env.VITE_APP_BASE_API + "/cpq/product/importData",
+  // 选中的文件
+  selectedFile: null
+})
 
 // 品牌和系列列表
 const brandList = ref([])
@@ -181,6 +229,11 @@ const bomList = ref([])
 
 // 特性参数列表
 const paramList = ref([])
+
+// 图片相关列表
+const imageList = ref([])
+const mainImageFileList = ref([])
+const imageListFileList = ref([])
 
 // 产品属性相关
 const attributesRef = ref(null) // 产品属性组件引用，用于手动触发属性刷新和获取属性
@@ -240,10 +293,7 @@ const rules = reactive({
   productStatus: [{ required: true, message: '产品状态不能为空', trigger: 'change' }],
   catalogId: [{ required: true, message: '所属目录不能为空', trigger: 'change' }],
   productVersion: [{ required: true, message: '产品版本不能为空', trigger: 'blur' }],
-  basePrice: [
-    { required: false, message: '基准价格不能为空', trigger: 'blur' },
-    { type: 'number', min: 0, message: '基准价格必须大于等于0', trigger: 'blur' }
-  ],
+ 
   priceUnit: [{ required: true, message: '价格单位不能为空', trigger: 'change' }],
   mainImageUrl: [
     { required: false, message: '请上传产品主图', trigger: 'change' },
@@ -274,10 +324,7 @@ const rules = reactive({
     { required: false, message: '请输入产品重量', trigger: 'blur' },
     { type: 'number', min: 0, message: '产品重量必须大于等于0', trigger: 'blur' }
   ],
-  dimensions: [{ required: false, message: '请输入产品尺寸', trigger: 'blur' }],
-  warrantyPeriod: [
-    { type: 'number', min: 0, message: '保质期必须大于等于0', trigger: 'blur' }
-  ]
+  dimensions: [{ required: false, message: '请输入产品尺寸', trigger: 'blur' }]
 })
 
 const getList = async () => {
@@ -422,21 +469,53 @@ const handleDelete = async (row) => {
 
 // 导出产品列表
 const handleExport = () => {
-  // 调用导出API
-  listProduct(queryParams).then(response => {
-    // 创建下载链接并下载文件
-    const blob = new Blob([response], { type: 'application/vnd.ms-excel' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = '产品列表.xlsx'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(link.href)
-    ElMessage.success('导出成功')
-  }).catch(error => {
-    ElMessage.error('导出失败')
-  })
+  proxy.download("cpq/product/export", {
+    ...queryParams
+  }, `product_${new Date().getTime()}.xlsx`)
+}
+
+// 打开导入对话框
+const handleImport = () => {
+  upload.title = "产品导入"
+  upload.open = true
+}
+
+// 下载模板操作
+const importTemplate = () => {
+  proxy.download("cpq/product/importTemplate", {}, `product_template_${new Date().getTime()}.xlsx`)
+}
+
+// 文件上传中处理
+const handleFileUploadProgress = (event, file, fileList) => {
+  upload.isUploading = true
+}
+
+// 文件选择处理
+const handleFileChange = (file, fileList) => {
+  upload.selectedFile = file
+}
+
+// 文件删除处理
+const handleFileRemove = (file, fileList) => {
+  upload.selectedFile = null
+}
+
+// 文件上传成功处理
+const handleFileSuccess = (response, file) => {
+  upload.open = false
+  upload.isUploading = false
+  proxy.$refs.uploadRef.handleRemove(file)
+  proxy.$alert("<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" + response.msg + "</div>", "导入结果", { dangerouslyUseHTMLString: true })
+  getList()
+}
+
+// 提交上传文件
+const submitFileForm = () => {
+  if (!upload.selectedFile || upload.selectedFile.length === 0 || !upload.selectedFile.name.toLowerCase().endsWith('.xls') && !upload.selectedFile.name.toLowerCase().endsWith('.xlsx')) {
+    proxy.$modal.msgError("请选择后缀为 “xls”或“xlsx”的文件。")
+    return
+  }
+  proxy.$refs.uploadRef.submit()
 }
 
 
@@ -672,6 +751,8 @@ watch(
 )
 
 onMounted(async () => {
+  // 获取用户store实例
+  const userStore = useUserStore()
   await Promise.all([getBrandList(), getCatalogTree()])
   getList()
 })
