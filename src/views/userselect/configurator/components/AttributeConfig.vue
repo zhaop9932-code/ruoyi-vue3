@@ -383,7 +383,11 @@
                           v-if="props.currentNode.selectionType === 'single'"
                           v-model="formData.selectedProductId"
                           :label="product.relationObjectId"
-                          @change="handleProductChange(product.relationObjectId)"
+                          @change="async (value) => {
+                            // 更新selectedProductIds以保持一致性
+                            formData.selectedProductIds = value ? [value] : []
+                            await handleProductChange(value)
+                          }"
                           @click.stop
                           size="small"
                         >
@@ -394,7 +398,11 @@
                           v-else
                           v-model="formData.selectedProductIds"
                           :label="product.relationObjectId"
-                          @change="handleProductChange(product.relationObjectId)"
+                          @change="async () => {
+                            // 根据复选框的选中状态决定是选中还是取消选中
+                            const isSelected = formData.selectedProductIds.includes(product.relationObjectId)
+                            await handleProductChange(isSelected ? product.relationObjectId : null)
+                          }"
                           @click.stop
                           size="small"
                         >
@@ -534,6 +542,24 @@ const saving = ref(false)
 // 自定义表单验证状态
 const validateStatus = ref('')
 const validateError = ref('')
+
+// 重置表单数据
+const resetFormData = () => {
+  formData.value = {
+    selectedProductId: null,
+    selectedProductIds: [],
+    productQuantities: {},
+    attrs: {},
+    dynamicAttrs: {}
+  }
+  formRules.value = {}
+  validationErrors.value = {}
+  attributeGroups.value = []
+  relatedProducts.value = []
+  dynamicAttributes.value = []
+  validateStatus.value = ''
+  validateError.value = ''
+}
 
 // 产品搜索表单
 const productSearchForm = ref({
@@ -715,30 +741,51 @@ const selectProduct = async (product) => {
     if (index > -1) {
       // 取消选择
       formData.value.selectedProductIds.splice(index, 1)
+      // 调用handleProductChange更新store，传递null表示取消选中
+      await handleProductChange(null)
     } else {
       // 添加选择
       formData.value.selectedProductIds.push(product.relationObjectId)
+      // 调用handleProductChange更新store
+      await handleProductChange(product.relationObjectId)
     }
   } else {
-    // 单选模式 - 保持原有逻辑，每次只能选择一个产品
-    formData.value.selectedProductId = product.relationObjectId
-    // 单选模式下selectedProductIds数组只存储当前选中的产品ID
-    formData.value.selectedProductIds = [product.relationObjectId]
+    // 单选模式 - 支持再次点击取消选中
+    if (formData.value.selectedProductId === product.relationObjectId) {
+      // 如果点击的是已选中的产品，则取消选中
+      formData.value.selectedProductId = null
+      formData.value.selectedProductIds = []
+      // 调用handleProductChange更新store，传递null表示取消选中
+      await handleProductChange(null)
+    } else {
+      // 选择新的产品
+      formData.value.selectedProductId = product.relationObjectId
+      // 单选模式下selectedProductIds数组只存储当前选中的产品ID
+      formData.value.selectedProductIds = [product.relationObjectId]
+      // 调用handleProductChange更新store
+      await handleProductChange(product.relationObjectId)
+    }
   }
-  
-  // 调用handleProductChange更新store
-  await handleProductChange(product.relationObjectId)
 }
 
 // 处理表格选择变化
-const handleTableSelectionChange = (selection, selectedRowKeys) => {
-  if (props.currentNode.selectionType === 'single' && selectedRowKeys.length > 1) {
-    // 单选模式下只保留第一个选中的产品
-    selectedRowKeys = [selectedRowKeys[0]]
+const handleTableSelectionChange = async (selection, selectedRowKeys) => {
+  if (props.currentNode.selectionType === 'single') {
+    if (selectedRowKeys.length > 1) {
+      // 单选模式下只保留第一个选中的产品
+      selectedRowKeys = [selectedRowKeys[0]]
+    }
     // 更新selectedProductId
-    formData.value.selectedProductId = selectedRowKeys[0]
+    formData.value.selectedProductId = selectedRowKeys.length > 0 ? selectedRowKeys[0] : null
+    formData.value.selectedProductIds = selectedRowKeys
+    // 调用handleProductChange更新store
+    await handleProductChange(formData.value.selectedProductId)
+  } else {
+    // 多选模式
+    formData.value.selectedProductIds = selectedRowKeys
+    // 调用handleProductChange更新store
+    await handleProductChange(null)
   }
-  formData.value.selectedProductIds = selectedRowKeys
 }
 
 // 处理产品分页变化
@@ -1274,6 +1321,36 @@ const loadNodeAttributes = async () => {
   ])
 }
 
+// 监听当前节点变化
+watch(
+  () => props.currentNode,
+  async (newNode) => {
+    if (newNode) {
+      console.log('当前节点变化，重新加载配置:', newNode)
+      // 初始化表单数据，优先使用节点配置中的数据
+      const nodeConfig = newNode.configuration || {}
+      formData.value = {
+        selectedProductId: nodeConfig.selectedProductId || null,
+        selectedProductIds: nodeConfig.selectedProductIds || [], // 用于多选产品
+        productQuantities: nodeConfig.productQuantities || {}, // 用于存储每个产品的独立数量 { productId: quantity }
+        attrs: nodeConfig.attrs || {},
+        dynamicAttrs: nodeConfig.dynamicAttrs || {} // 动态属性数据
+      }
+      
+      // 重新加载节点属性和相关产品
+      await Promise.all([
+        loadStaticAttributes(),
+        loadDynamicAttributes(),
+        loadRelatedProducts()
+      ])
+    } else {
+      // 当currentNode为null时，重置表单数据
+      resetFormData()
+    }
+  },
+  { deep: true, immediate: true }
+)
+
 // 初始化选中状态
 const initializeSelectedState = () => {
   if (!props.currentNode || !relatedProducts.value.length) return
@@ -1284,8 +1361,17 @@ const initializeSelectedState = () => {
   // 从节点配置中获取选中的产品ID
   const nodeConfig = props.currentNode.configuration || {}
   const selectedId = nodeConfig.selectedProductId
-  const selectedIds = nodeConfig.selectedProductIds || []
+  let selectedIds = nodeConfig.selectedProductIds || []
   const savedQuantities = nodeConfig.productQuantities || {}
+  
+  // 确保selectedIds是数组类型
+  if (!Array.isArray(selectedIds)) {
+    if (selectedIds) {
+      selectedIds = [selectedIds]
+    } else {
+      selectedIds = []
+    }
+  }
   
   console.log('initializeSelectedState: 配置中的选中信息:', {
     selectedId,
@@ -1296,18 +1382,17 @@ const initializeSelectedState = () => {
   // 根据选择类型初始化选中状态
   if (props.currentNode.selectionType === 'multiple') {
     // 多选模式
-    formData.value.selectedProductIds = selectedIds
-    
-    // 确保selectedProductIds是数组
-    if (!Array.isArray(formData.value.selectedProductIds)) {
-      formData.value.selectedProductIds = []
-    }
+    formData.value.selectedProductIds = [...selectedIds] // 使用展开运算符创建新数组
     
     console.log('initializeSelectedState: 多选模式，设置selectedProductIds:', formData.value.selectedProductIds)
   } else {
     // 单选模式
-    formData.value.selectedProductId = selectedId
-    formData.value.selectedProductIds = selectedId ? [selectedId] : []
+    // 确保selectedId是有效的产品ID（存在于产品列表中）
+    const validSelectedId = selectedId && relatedProducts.value.some(p => p.relationObjectId === selectedId) 
+      ? selectedId 
+      : null
+    formData.value.selectedProductId = validSelectedId
+    formData.value.selectedProductIds = validSelectedId ? [validSelectedId] : []
     
     console.log('initializeSelectedState: 单选模式，设置selectedProductId:', formData.value.selectedProductId)
   }
@@ -1316,10 +1401,20 @@ const initializeSelectedState = () => {
   relatedProducts.value.forEach(product => {
     const productId = product.relationObjectId
     // 从保存的配置中获取数量，如果没有则使用默认值
-    formData.value.productQuantities[productId] = savedQuantities[productId] !== undefined 
-      ? savedQuantities[productId] 
-      : props.currentNode.defaultQuantity || 1
+    if (savedQuantities[productId] !== undefined) {
+      formData.value.productQuantities[productId] = savedQuantities[productId]
+    } else if (formData.value.productQuantities[productId] === undefined) {
+      formData.value.productQuantities[productId] = props.currentNode.defaultQuantity || 1
+    }
   })
+  
+  // 恢复其他配置（属性值等）
+  if (nodeConfig.attrs) {
+    Object.assign(formData.value.attrs, nodeConfig.attrs)
+  }
+  if (nodeConfig.dynamicAttrs) {
+    Object.assign(formData.value.dynamicAttrs, nodeConfig.dynamicAttrs)
+  }
   
   console.log('initializeSelectedState: 初始化完成', {
     selectedProductId: formData.value.selectedProductId,
@@ -1329,10 +1424,24 @@ const initializeSelectedState = () => {
   
   // 更新表单验证状态，初始加载时不显示错误
   updateValidationStatus()
+  
+  // 强制更新表单，确保选中状态立即生效
+  if (formRef.value) {
+    formRef.value.resetFields()
+    // 重新设置表单数据
+    formData.value = {
+      ...formData.value,
+      selectedProductId: formData.value.selectedProductId,
+      selectedProductIds: formData.value.selectedProductIds,
+      productQuantities: formData.value.productQuantities,
+      attrs: formData.value.attrs,
+      dynamicAttrs: formData.value.dynamicAttrs
+    }
+  }
 }
 
 // 加载关联产品
-const loadRelatedProducts = async () => {
+const loadRelatedProducts = async (autoInitialize = true) => {
   if (!props.currentNode || !props.bomId) return
   
   console.log('loadRelatedProducts: 开始加载关联产品')
@@ -1360,16 +1469,21 @@ const loadRelatedProducts = async () => {
     
     // 为每个产品预初始化数量，避免渲染时出现undefined导致标红
     products.forEach(product => {
+      const productId = product.relationObjectId
       // 先为产品设置默认数量，避免渲染时出现undefined
-      formData.value.productQuantities[product.relationObjectId] = props.currentNode.defaultQuantity || 1
+      if (formData.value.productQuantities[productId] === undefined) {
+        formData.value.productQuantities[productId] = props.currentNode.defaultQuantity || 1
+      }
     })
     
     // 设置产品列表
     relatedProducts.value = products
     
-    // 初始化选中状态和数量
-    await nextTick()
-    initializeSelectedState()
+    // 如果autoInitialize为true，则自动初始化选中状态和数量
+    if (autoInitialize) {
+      await nextTick()
+      initializeSelectedState()
+    }
     
   } catch (error) {
     console.error('加载关联产品失败:', error)
@@ -1479,9 +1593,12 @@ const getSelectedProductDetails = () => {
 
 // 产品选择变化处理
 const handleProductChange = async (productId) => {
-  // 为新选择的产品设置默认数量
-  if (!formData.value.productQuantities[productId]) {
-    formData.value.productQuantities[productId] = props.currentNode.defaultQuantity || 1
+  // 如果productId为null，表示取消选中，不需要设置默认数量
+  if (productId !== null && productId !== undefined) {
+    // 为新选择的产品设置默认数量
+    if (!formData.value.productQuantities[productId]) {
+      formData.value.productQuantities[productId] = props.currentNode.defaultQuantity || 1
+    }
   }
   
   // 调用store更新产品选择
@@ -1491,6 +1608,7 @@ const handleProductChange = async (productId) => {
       [...formData.value.selectedProductIds]
     )
   } else {
+    // 单选模式：如果productId为null，传递null给store表示取消选中
     await configuratorStore.selectNodeProduct(
       props.currentNode.bomStructureId,
       productId
@@ -1501,7 +1619,12 @@ const handleProductChange = async (productId) => {
   await configuratorStore.saveNodeConfiguration(
     props.currentNode.bomStructureId,
     {
-      quantity: formData.value.productQuantities[productId],
+      // 如果productId为null，quantity使用第一个选中产品的数量，或者使用默认值
+      quantity: productId !== null && productId !== undefined 
+        ? formData.value.productQuantities[productId] 
+        : (formData.value.selectedProductIds.length > 0 
+          ? formData.value.productQuantities[formData.value.selectedProductIds[0]] 
+          : props.currentNode.defaultQuantity || 1),
       productQuantities: formData.value.productQuantities,
       // 根据选择类型传递正确的产品ID字段
       ...(props.currentNode.selectionType === 'multiple' 
@@ -1512,6 +1635,23 @@ const handleProductChange = async (productId) => {
       ...formData.value.dynamicAttrs
     }
   )
+  
+  // 触发配置确认事件，确保父组件更新configuredNodes
+  emit('config-confirm', {
+    quantity: productId !== null && productId !== undefined 
+      ? formData.value.productQuantities[productId] 
+      : (formData.value.selectedProductIds.length > 0 
+        ? formData.value.productQuantities[formData.value.selectedProductIds[0]] 
+        : props.currentNode.defaultQuantity || 1),
+    productQuantities: formData.value.productQuantities,
+    // 根据选择类型传递正确的产品ID字段
+    ...(props.currentNode.selectionType === 'multiple' 
+      ? { selectedProductIds: formData.value.selectedProductIds }
+      : { selectedProductId: formData.value.selectedProductId }),
+    productDetails: getSelectedProductDetails(),
+    ...formData.value.attrs,
+    ...formData.value.dynamicAttrs
+  })
   
   // 更新表单验证状态
   updateValidationStatus()
@@ -1548,8 +1688,12 @@ const updateValidationStatus = (triggeredByUser = false) => {
 
 // 组件挂载时初始化
 onMounted(async () => {
+  console.log('AttributeConfig: 组件挂载')
+  // 重置表单数据，确保页面刷新时已选中的产品和属性会被取消选中
+  resetFormData()
+  
   if (props.currentNode) {
-    console.log('AttributeConfig: 组件挂载，初始化选中状态')
+    console.log('AttributeConfig: 初始化选中状态')
     await nextTick()
     // 确保选中状态正确设置
     if (props.currentNode.selectionType === 'multiple') {
@@ -1574,38 +1718,21 @@ watch(
     if (newBomStructureId && newBomStructureId !== oldBomStructureId) {
       const newNode = props.currentNode
       if (newNode) {
-        // 重置表单
-        formData.value = {
-          selectedProductId: null,
-          selectedProductIds: [],
-          productQuantities: {}, // 用于存储每个产品的独立数量
-          attrs: {},
-          dynamicAttrs: {}
-        }
-        formRules.value = {}
-        validationErrors.value = {}
-        attributeGroups.value = []
-        relatedProducts.value = []
-        dynamicAttributes.value = []
+        // 重置表单数据
+        resetFormData()
         
         console.log('AttributeConfig: 开始加载节点数据')
-        // 加载节点数据
+        console.log('AttributeConfig: 节点配置:', newNode.configuration)
+        
+        // 加载节点数据（自动初始化选中状态）
         try {
           await Promise.all([
-            loadNodeAttributes(),
-            loadRelatedProducts()
+            loadStaticAttributes(),
+            loadDynamicAttributes(),
+            loadRelatedProducts() // 自动初始化选中状态
           ])
           
           console.log('AttributeConfig: 节点数据加载完成')
-          // 如果节点已配置，直接使用initializeSelectedState初始化选中状态
-          if (newNode.configuration) {
-            // 先加载基础配置
-            Object.assign(formData.value, newNode.configuration)
-            
-            // 使用统一的初始化函数处理选中状态
-            await nextTick()
-            initializeSelectedState()
-          }
           
           console.log('AttributeConfig: 表单数据:', formData.value)
           console.log('AttributeConfig: 属性组:', attributeGroups.value)
@@ -1620,15 +1747,47 @@ watch(
   },
   { immediate: true }
 )
+
+// 监听currentNode的深度变化，确保页面刷新时重置表单
+watch(
+  () => props.currentNode,
+  async (newNode) => {
+    console.log('AttributeConfig: currentNode变化:', newNode)
+    // 当currentNode为null时，重置表单数据
+    if (!newNode) {
+      resetFormData()
+    }
+  },
+  { deep: true }
+)
 </script>
 
 <style scoped lang="scss">
 .attribute-config {
   height: 100%;
   padding: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   background-color: #fafafa;
   box-sizing: border-box;
+  // 优化滚动条样式
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+    
+    &:hover {
+      background: #a8a8a8;
+    }
+  }
   
   /* 空状态样式 */
   .empty-state {
@@ -1850,7 +2009,14 @@ watch(
         margin-bottom: 24px;
         
         .section-header {
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          background-color: #fff;
+          padding: 12px 0 6px 0;
           margin-bottom: 16px;
+          margin-top: -12px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
       }
       

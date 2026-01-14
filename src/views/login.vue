@@ -2,6 +2,17 @@
   <div class="login">
     <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-form">
       <h3 class="title">{{ title }}</h3>
+      <el-form-item prop="tenantCode">
+        <el-input
+          v-model="loginForm.tenantCode"
+          type="text"
+          size="large"
+          auto-complete="off"
+          placeholder="租户编码"
+        >
+          <template #prefix><svg-icon icon-class="company" class="el-input__icon input-icon" /></template>
+        </el-input>
+      </el-form-item>
       <el-form-item prop="username">
         <el-input
           v-model="loginForm.username"
@@ -65,6 +76,7 @@
 </template>
 
 <script setup>
+import { ref, onMounted, watch } from "vue"
 import { getCodeImg } from "@/api/login"
 import Cookies from "js-cookie"
 import { encrypt, decrypt } from "@/utils/jsencrypt"
@@ -74,21 +86,18 @@ const title = import.meta.env.VITE_APP_TITLE
 const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
-const { proxy } = getCurrentInstance()
+
+// 表单ref
+const loginRef = ref(null)
 
 const loginForm = ref({
+  tenantCode: "default",
   username: "admin",
   password: "admin123",
   rememberMe: false,
   code: "",
   uuid: ""
 })
-
-const loginRules = {
-  username: [{ required: true, trigger: "blur", message: "请输入您的账号" }],
-  password: [{ required: true, trigger: "blur", message: "请输入您的密码" }],
-  code: [{ required: true, trigger: "change", message: "请输入验证码" }]
-}
 
 const codeUrl = ref("")
 const loading = ref(false)
@@ -98,21 +107,35 @@ const captchaEnabled = ref(true)
 const register = ref(false)
 const redirect = ref(undefined)
 
+const loginRules = ref({
+  tenantCode: [{ required: true, trigger: "blur", message: "请输入租户编码" }],
+  username: [{ required: true, trigger: "blur", message: "请输入您的账号" }],
+  password: [{ required: true, trigger: "blur", message: "请输入您的密码" }],
+  code: [{ required: captchaEnabled.value, trigger: "change", message: "请输入验证码" }]
+})
+
+// 监听验证码开关变化，动态调整验证规则
+watch(captchaEnabled, (newVal) => {
+  loginRules.value.code[0].required = newVal
+})
+
 watch(route, (newRoute) => {
     redirect.value = newRoute.query && newRoute.query.redirect
 }, { immediate: true })
 
 function handleLogin() {
-  proxy.$refs.loginRef.validate(valid => {
+  loginRef.value.validate(valid => {
     if (valid) {
       loading.value = true
-      // 勾选了需要记住密码设置在 cookie 中设置记住用户名和密码
+      // 勾选了需要记住密码设置在 cookie 中设置记住用户名、密码和租户编码
       if (loginForm.value.rememberMe) {
+        Cookies.set("tenantCode", loginForm.value.tenantCode, { expires: 30 })
         Cookies.set("username", loginForm.value.username, { expires: 30 })
         Cookies.set("password", encrypt(loginForm.value.password), { expires: 30 })
         Cookies.set("rememberMe", loginForm.value.rememberMe, { expires: 30 })
       } else {
         // 否则移除
+        Cookies.remove("tenantCode")
         Cookies.remove("username")
         Cookies.remove("password")
         Cookies.remove("rememberMe")
@@ -149,10 +172,12 @@ function getCode() {
 }
 
 function getCookie() {
+  const tenantCode = Cookies.get("tenantCode")
   const username = Cookies.get("username")
   const password = Cookies.get("password")
   const rememberMe = Cookies.get("rememberMe")
   loginForm.value = {
+    tenantCode: tenantCode === undefined ? loginForm.value.tenantCode : tenantCode,
     username: username === undefined ? loginForm.value.username : username,
     password: password === undefined ? loginForm.value.password : decrypt(password),
     rememberMe: rememberMe === undefined ? false : Boolean(rememberMe)

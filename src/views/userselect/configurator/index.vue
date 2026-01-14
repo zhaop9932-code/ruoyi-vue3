@@ -55,7 +55,6 @@
           </template>
         </el-dropdown>
         
-        <el-button :icon="Refresh" @click="handleReload">刷新</el-button>
         <el-button :icon="Setting" @click="handleResetConfig">重置</el-button>
         <el-button :icon="Document" @click="handleGenerateQuote">生成报价单</el-button>
         <el-button :icon="Share" @click="handleShareConfig">分享配置</el-button>
@@ -110,6 +109,7 @@
               :bom-id="bomId"
               :tree-data="treeData"
               :configured-nodes="configuredNodes"
+              :selected-node="selectedNode"
               @node-select="handleNodeSelect"
             />
           </div>
@@ -188,7 +188,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { 
   Refresh, ArrowLeft, Check, Plus, Collection, ArrowDown,
@@ -387,10 +387,23 @@ const loadBomStructure = async (forceReload = false) => {
       })
       
       // 自动选中第一个节点
-      if (newTreeData.length > 0 && !selectedNode.value) {
-        const firstNode = newTreeData[0]
-        console.log('自动选中第一个节点:', firstNode)
-        handleNodeSelect(firstNode)
+      if (newTreeData.length > 0) {
+        if (!selectedNode.value) {
+          const firstNode = newTreeData[0]
+          console.log('自动选中第一个节点:', firstNode)
+          handleNodeSelect(firstNode)
+        } else {
+          // 如果已有选中节点，恢复其选中状态
+          const existingNode = findNodeById(treeData.value, selectedNode.value.bomStructureId)
+          if (existingNode) {
+            handleNodeSelect(existingNode)
+          } else if (newTreeData.length > 0) {
+            // 如果原选中节点不存在，选择第一个节点
+            const firstNode = newTreeData[0]
+            console.log('原选中节点不存在，自动选中第一个节点:', firstNode)
+            handleNodeSelect(firstNode)
+          }
+        }
       }
     }
   } catch (error) {
@@ -533,14 +546,46 @@ const handleLeftTabChange = (tab) => {
 // 处理节点选择
 const handleNodeSelect = (node) => {
   console.log('节点被点击:', node)
-  selectedNode.value = node
   
-  // 更新向导步骤
-  if (showWizard.value) {
-    wizardStep.value = 1
+  // 确保节点对象有configuration属性
+  if (!node.configuration) {
+    node.configuration = {}
   }
   
-  console.log('selectedNode已更新:', selectedNode.value)
+  // 检查配置清单中是否有当前结构的有效项目
+  const configuredNode = configuredNodes.value.find(n => n.bomStructureId === node.bomStructureId)
+  
+  // 优先从配置清单中加载配置，确保与右侧配置清单保持一致
+  if (configuredNode && configuredNode.configuration) {
+    console.log('从配置清单中恢复节点配置:', configuredNode.configuration)
+    node.configuration = { ...configuredNode.configuration }
+    // 更新 currentConfig
+    currentConfig.value = {
+      ...currentConfig.value,
+      [node.bomStructureId]: { ...configuredNode.configuration }
+    }
+  } else if (currentConfig.value[node.bomStructureId]) {
+    // 如果配置清单中没有，从 currentConfig 中加载
+    console.log('恢复节点配置:', currentConfig.value[node.bomStructureId])
+    node.configuration = { ...currentConfig.value[node.bomStructureId] }
+  }
+  
+  console.log('应用配置后:', node.configuration)
+  
+  // 立即更新 selectedNode，触发 AttributeConfig 组件的 watcher
+  selectedNode.value = null
+  
+  // 使用 setTimeout 确保组件更新后再设置新的 selectedNode
+  setTimeout(() => {
+    selectedNode.value = node
+    
+    // 更新向导步骤
+    if (showWizard.value) {
+      wizardStep.value = 1
+    }
+    
+    console.log('selectedNode已更新:', selectedNode.value)
+  }, 0)
 }
 
 // 处理配置变更
@@ -571,6 +616,21 @@ const handleConfigConfirm = (config) => {
       ...selectedNode.value,
       configuration: config
     })
+  } else {
+    // 更新已配置列表中的配置
+    const index = configuredNodes.value.findIndex(n => n.bomStructureId === selectedNode.value.bomStructureId)
+    if (index !== -1) {
+      configuredNodes.value[index] = {
+        ...selectedNode.value,
+        configuration: config
+      }
+    }
+  }
+  
+  // 更新当前配置
+  currentConfig.value = {
+    ...currentConfig.value,
+    [selectedNode.value.bomStructureId]: config
   }
   
   // 更新向导步骤
@@ -580,10 +640,8 @@ const handleConfigConfirm = (config) => {
   
   ElMessage.success('配置保存成功')
   
-  // 清空选中节点，准备选择下一个
-  setTimeout(() => {
-    selectedNode.value = null
-  }, 500)
+  // 保留当前选中节点，允许用户继续修改
+  // 移除清空选中节点的逻辑，让用户可以继续操作当前节点
 }
 
 
@@ -709,7 +767,7 @@ const calculatePrice = () => {
       const nodeType = node.nodeType || '0'
       
       // 检查是否有选中的产品ID
-      const hasSelectedProducts = node.configuration.selectedProductId || 
+      const hasSelectedProducts = (node.configuration.selectedProductId !== null && node.configuration.selectedProductId !== undefined) || 
                                  (Array.isArray(node.configuration.selectedProductIds) && node.configuration.selectedProductIds.length > 0)
       
       if (hasSelectedProducts) {
@@ -740,22 +798,6 @@ const calculatePrice = () => {
             total += subtotal
           }
         })
-      } else if (!['0', '1', '2'].includes(nodeType) && node.configuration.price) {
-        // 只有当节点类型不是0,1,2且没有选中产品时，才添加节点信息
-        const quantity = node.configuration.quantity || 1
-        const price = node.configuration.price
-        const subtotal = quantity * price
-        
-        breakdown.push({
-          nodeId: node.bomStructureId,
-          productName: node.nodeName,
-          specification: '',
-          quantity,
-          unitPrice: price,
-          subtotal
-        })
-        
-        total += subtotal
       }
     }
   })
@@ -794,12 +836,26 @@ const handleBack = async () => {
 
 // 刷新配置器
 const handleReload = async () => {
-  await loadBomStructure()
+  // 重置store中的配置数据
+  configuratorStore.resetConfiguration()
+  
+  // 先设置selectedNode为null，触发AttributeConfig组件的重置
   selectedNode.value = null
+  
+  // 等待组件更新
+  await nextTick()
+  
+  await loadBomStructure(true) // 强制重新加载BOM结构
+  
+  // 再次设置selectedNode为null，确保不会自动选中第一个节点
+  selectedNode.value = null
+  
   configuredNodes.value = []
   currentConfig.value = {}
   validationResults.value = []
   validationErrors.value = []
+  pricingBreakdown.value = []
+  totalPrice.value = 0
 }
 
 // 重置配置
@@ -1000,6 +1056,18 @@ onMounted(async () => {
   console.log('查询参数:', route.query)
   console.log('初始bomId:', bomId.value)
   
+  // 重置store中的配置数据，确保页面刷新时清单被清空
+  configuratorStore.resetConfiguration()
+  
+  // 重置所有配置状态，确保页面刷新时清单被清空
+  selectedNode.value = null
+  configuredNodes.value = []
+  currentConfig.value = {}
+  validationResults.value = []
+  validationErrors.value = []
+  pricingBreakdown.value = []
+  totalPrice.value = 0
+  
   if (!bomId.value) {
     ElMessage.error('缺少BOM ID参数')
     router.push({ path: '/userselect/configurator/list' })
@@ -1074,12 +1142,17 @@ watch(
 
 <style scoped lang="scss">
 .product-configurator {
-  height: 100%;
+  height: 100vh; // 固定视口高度
   display: flex;
   flex-direction: column;
   background-color: #f5f7fa;
+  overflow: hidden; // 防止整个容器滚动
+  position: relative; // 确保定位上下文
 
   .configurator-header {
+    flex-shrink: 0; // 不收缩
+    position: sticky; // 使用 sticky 定位，固定在顶部
+    top: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1087,7 +1160,7 @@ watch(
     background-color: #fff;
     border-bottom: 1px solid #e4e7ed;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    z-index: 10;
+    z-index: 100; // 提高层级，确保在最上层
 
     .header-left {
       display: flex;
@@ -1157,6 +1230,7 @@ watch(
   }
   
   .config-wizard {
+    flex-shrink: 0;
     padding: 24px 48px;
     background-color: #fff;
     border-bottom: 1px solid #e4e7ed;
@@ -1174,12 +1248,36 @@ watch(
 
   .configurator-content {
     flex: 1;
-    overflow: hidden;
+    overflow: hidden; // 防止内容区整体滚动
     padding: 16px;
+    min-height: 0; // 重要：允许flex子元素缩小
+    display: flex; // 添加 flex 布局
+    flex-direction: column; // 垂直方向
 
     .el-container {
+      flex: 1; // 占据剩余空间
       height: 100%;
       gap: 16px;
+      min-height: 0; // 重要：允许flex子元素缩小
+      display: flex; // 确保容器是 flex
+      
+      // 确保 el-aside 和 el-main 正确设置高度
+      :deep(.el-aside) {
+        height: 100%;
+        overflow: hidden;
+        display: flex; // 添加 flex 布局
+        flex-direction: column; // 垂直方向
+        flex-shrink: 0; // 不收缩
+      }
+      
+      :deep(.el-main) {
+        height: 100%;
+        overflow: hidden;
+        display: flex; // 添加 flex 布局
+        flex-direction: column; // 垂直方向
+        flex: 1; // 占据剩余空间
+        min-height: 0; // 允许缩小
+      }
     }
 
     .tree-panel,
@@ -1188,15 +1286,66 @@ watch(
       background-color: #fff;
       border-radius: 8px;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-      overflow: hidden;
+      overflow: hidden; // 隐藏溢出
       display: flex;
       flex-direction: column;
       padding: 0;
+      height: 100%;
+      position: relative; // 确保定位上下文
+    }
+    
+    // 左侧面板：固定高度，内容可滚动
+    .tree-panel {
+      flex-shrink: 0; // 不收缩
+      
+      .panel-header {
+        flex-shrink: 0; // 头部不收缩
+      }
+      
+      .panel-content {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0; // 重要：允许flex子元素缩小
+      }
+    }
+    
+    // 右侧面板：固定高度，内容可滚动
+    .summary-panel {
+      flex-shrink: 0; // 不收缩
+      
+      .panel-header {
+        flex-shrink: 0; // 头部不收缩
+      }
+      
+      .panel-content {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0; // 重要：允许flex子元素缩小
+      }
+    }
+    
+    // 中间配置面板：固定高度，只有内容可滚动
+    .config-panel {
+      flex: 1; // 占据剩余空间
+      overflow: hidden; // 隐藏主容器的滚动
+      min-height: 0; // 重要：允许flex子元素缩小
+      
+      // 让 AttributeConfig 组件内部可滚动
+      :deep(.attribute-config) {
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0; // 重要：允许flex子元素缩小
+      }
     }
     
     .panel-header {
-      flex-shrink: 0;
+      flex-shrink: 0; // 头部不收缩，保持固定
       border-bottom: 1px solid #e4e7ed;
+      position: relative; // 确保定位
+      z-index: 10; // 确保在内容之上
       
       :deep(.el-tabs) {
         .el-tabs__header {
@@ -1227,8 +1376,30 @@ watch(
     
     .panel-content {
       flex: 1;
-      overflow: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
       padding: 0;
+      min-height: 0; // 重要：允许flex子元素缩小
+      position: relative; // 确保定位
+      
+      // 优化滚动条样式
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+        
+        &:hover {
+          background: #a8a8a8;
+        }
+      }
     }
 
 

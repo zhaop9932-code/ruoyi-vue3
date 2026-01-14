@@ -87,6 +87,10 @@ const props = defineProps({
   configuredNodes: {
     type: Array,
     default: () => []
+  },
+  selectedNode: {
+    type: Object,
+    default: null
   }
 })
 
@@ -187,6 +191,17 @@ watch(
   },
   { deep: true }
 )
+
+// 监听选中节点变化，更新树的当前节点
+watch(
+  () => props.selectedNode,
+  (newNode) => {
+    if (newNode && treeRef.value) {
+      treeRef.value.setCurrentKey(newNode.bomStructureId)
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">
@@ -195,14 +210,18 @@ watch(
   display: flex;
   flex-direction: column;
   padding: 16px;
+  min-height: 0; // 重要：允许flex子元素缩小
   
   .tree-header {
+    flex-shrink: 0;
     margin-bottom: 16px;
   }
   
   .el-tree {
     flex: 1;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0; // 重要：允许flex子元素缩小
     
     :deep(.el-tree-node__content) {
       height: 40px;

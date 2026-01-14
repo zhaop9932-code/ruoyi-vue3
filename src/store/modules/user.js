@@ -15,19 +15,21 @@ const useUserStore = defineStore(
       nickName: '',
       avatar: '',
       roles: [],
-      permissions: []
+      permissions: [],
+      tenantId: localStorage.getItem('tenantId') || '1'
     }),
     actions: {
       // 登录
       login(userInfo) {
-        const username = userInfo.username.trim()
-        const password = userInfo.password
-        const code = userInfo.code
-        const uuid = userInfo.uuid
         return new Promise((resolve, reject) => {
-          login(username, password, code, uuid).then(res => {
+          login(userInfo).then(res => {
             setToken(res.token)
             this.token = res.token
+            // 保存租户ID
+            if (res.data && res.data.tenantId) {
+              this.tenantId = res.data.tenantId
+              localStorage.setItem('tenantId', res.data.tenantId)
+            }
             resolve()
           }).catch(error => {
             reject(error)
@@ -53,6 +55,14 @@ const useUserStore = defineStore(
             this.name = user.userName
             this.nickName = user.nickName
             this.avatar = avatar
+            // 保存租户ID
+            if (user.tenantId) {
+              this.tenantId = user.tenantId
+              localStorage.setItem('tenantId', user.tenantId)
+            } else if (res.data && res.data.tenantId) {
+              this.tenantId = res.data.tenantId
+              localStorage.setItem('tenantId', res.data.tenantId)
+            }
             /* 初始密码提示 */
             if(res.isDefaultModifyPwd) {
               ElMessageBox.confirm('您的密码还是初始密码，请修改密码！',  '安全提示', {  confirmButtonText: '确定',  cancelButtonText: '取消',  type: 'warning' }).then(() => {
